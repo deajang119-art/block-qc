@@ -1,0 +1,30 @@
+{
+  "name": "블록포장 품질검측",
+  "short_name": "블록검측",
+  "description": "블록포장 현장 검측 — 줄눈 선형·줄눈 폭 / 경사(수평계) / 평탄성(3m 직선자)·단차",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1B2A",
+  "theme_color": "#1B3A5C",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
