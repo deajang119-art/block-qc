@@ -1180,8 +1180,40 @@ details ul{padding-left:18px;margin:7px 0}
     return { n: use.length, max: max, at: at, avg: avg, tol: o.tol, grade: grade, pts: use };
   }
 
+
+  /**
+   * 편차가 '완만한 곡선'인가 '들쭉날쭉'인가를 가른다.
+   * 곡선 보도에 직선 기준을 대면 곡률이 통째로 편차로 잡힌다. 그건 시공
+   * 불량이 아니라 선형이 곡선인 것이다. 2차식으로 맞춰 남는 잔차를 보면
+   * 구분된다 — 잔차가 작으면 곡선, 크면 진짜 요철이다.
+   * 반환 {curved: 0~1(곡선으로 설명되는 비율), sagitta: 곡선의 중앙 처짐 mm, rough: 곡선 뺀 나머지 RMS}
+   */
+  function curvature(pts) {
+    var n = pts.length;
+    if (n < 6) return null;
+    var d = devs(pts), s0 = pts.map(function (p) { return p.s; });
+    var mx = s0.reduce(function (a, b) { return a + b; }, 0) / n;
+    var A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0], i, j, k;
+    for (i = 0; i < n; i++) {
+      var u = (s0[i] - mx), v = [1, u, u * u];
+      for (j = 0; j < 3; j++) { for (k = 0; k < 3; k++) A[j][k] += v[j] * v[k]; b[j] += v[j] * d[i]; }
+    }
+    var c = solve(A, b);
+    if (!c) return null;
+    var rl = 0, rq = 0;
+    for (i = 0; i < n; i++) {
+      var u2 = (s0[i] - mx);
+      var fit = c[0] + c[1] * u2 + c[2] * u2 * u2;
+      rl += d[i] * d[i]; rq += (d[i] - fit) * (d[i] - fit);
+    }
+    rl = Math.sqrt(rl / n); rq = Math.sqrt(rq / n);
+    var span = Math.max.apply(null, s0) - Math.min.apply(null, s0);
+    return { curved: rl > 1e-6 ? Math.max(0, 1 - rq / rl) : 0,
+             sagitta: c[2] * Math.pow(span / 2, 2), rough: rq, rawRms: rl };
+  }
+
   root.BlockScan = {
-    scanGap: scanGap, gapJudge: gapJudge,
+    scanGap: scanGap, gapJudge: gapJudge, curvature: curvature,
     homography: homography, applyH: applyH, rectify: rectify,
     scanJoints: scanJoints, straightness: straightness, widths: widths,
     readValley: readValley, fitLine: fitLine, devs: devs, grade: grade
@@ -2119,7 +2151,7 @@ function aStd(){
       '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
       '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
       '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
-    $("#aShoot").innerHTML="촬영 요령 — ① <b>블록 4~8장만</b> 담기게 가까이서 — 길 전체를 담으면 못 잽니다 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 광각(초광각) 금지</b> — 원근은 펴도 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로 찍고, 판정할 줄눈을 화면 <b>가장자리에 두지 마십시오</b>.";
+    $("#aShoot").innerHTML="촬영 요령 — ① 구획 <b>네 모서리가 모두</b> 화면에 들어오게 — 길게 담아도 됩니다(줄눈마다 정밀도를 따로 알려줍니다) ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 초광각만 피하십시오</b> — 원근은 네 모서리로 정확히 펴지만, 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로.";
   }else{
     var f=aKind==="flat";
     $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
@@ -2232,13 +2264,13 @@ function aReadPlan(){
   var e1=dd(Q[0],Q[1]), e2=dd(Q[3],Q[2]);
   var persp=Math.max(e1,e2)/Math.max(1,Math.min(e1,e2));
   var worstMm=wmm/Math.max(1,Math.min(e1,e2));   // 먼 변 기준 = 최악 해상도
-  var perspBad = persp>2.5;
-  var resBad = worstMm > J/2;                    // 줄눈이 2화소 미만이면 선형도 못 믿는다
+  var perspBad = false;   // 철회 — 원근 3.5배에서도 검출률 100% 였다
+  var resBad = false;     // 철회 — 1.9화소 줄눈도 잡음 0.3mm 로 읽혔다
 
   var rect=BlockScan.rectify(aSrcCanvas(),aQuad(),wmm,hmm,{maxPx:8e6});
   if(!rect){ toast("네 점이 한 줄에 몰려 있습니다"); return; }
   // 줄눈이 4화소보다 얇게 찍히면 폭은 못 믿는다 — 실측 2.0mm 가 3.5mm 로 읽혔다
-  var wOK = worstMm <= J/4;
+  var wOK = worstMm <= J/3;   // 폭만은 여전히 해상도가 필요하다
   var back=aBack(rect), rows=[], marks=[], inverted=false;
   function run(axis){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
@@ -2262,6 +2294,20 @@ function aReadPlan(){
       jt.pts.forEach(function(q){ if(q.ok){ okN++; cSum+=q.contrast; } });
       var det = jt.tried? okN/jt.tried : 0;
       var cAvg = okN? cSum/okN : 0;
+      /* 국소 해상도 — 원근 때문에 줄눈마다 다르다(실측 한 장 안에서 2.6배 차이).
+         평균만 보면 앞쪽은 멀쩡한데 뒤쪽이 못 쓰는 상황을 놓친다. */
+      var sm=[];
+      for(var sx=span*0.1; sx<span*0.95; sx+=span/10){
+        var q0 = axis==="h"? back(sx,jt.pos) : back(jt.pos,sx);
+        var q1 = axis==="h"? back(sx+1,jt.pos) : back(jt.pos,sx+1);
+        var q2 = axis==="h"? back(sx,jt.pos+1) : back(jt.pos+1,sx);
+        var e1=Math.hypot(q1.x-q0.x,q1.y-q0.y), e2=Math.hypot(q2.x-q0.x,q2.y-q0.y);
+        sm.push(1/Math.max(1e-9,Math.sqrt(Math.max(e1*e2,1e-12))));
+      }
+      sm.sort(function(u,v){return u-v;});
+      var mmpx = sm.length? sm[sm.length>>1] : rect.mmPerPxSrc;
+      var prec = 0.25*mmpx*3;          // 가를 수 있는 최소 편차(잡음의 3배)
+      var cur = BlockScan.curvature(jt.pts.filter(function(q){return q.ok;}));
       if(jt.pol===-1) inverted=true;
       var segs=BlockScan.straightness(jt,{segLenMm:segLen, spanMm:span, tol:tol});
       var wd=BlockScan.widths(jt);
@@ -2270,6 +2316,7 @@ function aReadPlan(){
         rows.push({dir:axis==="h"?"가로":"세로", no:i+1, seg:k+1, nseg:segs.length,
           from:r.from, to:r.to, n:r.n, dmax:r.dmax, rms:r.rms, over:r.over, overP:r.overP,
           min:r.min, max:r.max, grade:r.grade, det:det, cAvg:cAvg, bad:(det<0.6||cAvg<14),
+          mmpx:mmpx, prec:prec, curved:cur?cur.curved:null, sag:cur?cur.sagitta:null,
           w: (wOK&&wd)? wd.avg-2*cham : null, wmax: (wOK&&wd)? wd.max-2*cham : null,
           wsd: (wOK&&wd)? wd.sd : null, off:false});
       });
@@ -2340,20 +2387,24 @@ function aRender(){
     html+='<div class="kv"><span>검사한 줄눈</span><b>'+live.length+'구간 (전체 '+aRes.rows.length+')</b></div>';
     var detAvg=aRes.rows.reduce(function(a,r){return a+(r.det||0);},0)/(aRes.rows.length||1);
     html+='<div class="kv"><span>줄눈 검출률</span><b>'+fx(detAvg*100,0)+'%</b></div>';
+    var curvy=live.filter(function(r){return r.curved!=null&&r.curved>0.8&&r.dmax>aRes.tol;});
+    if(curvy.length) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 초과 편차의 <b>'+Math.round(curvy[0].curved*100)+'%가 완만한 곡선</b>입니다(중앙 처짐 '+fx(Math.abs(curvy[0].sag||0),1)+'mm). 들쭉날쭉한 시공 오차가 아니라 <b>선형 자체가 곡선</b>일 수 있습니다. 곡선 구간이라면 직선 기준 통직도는 적용 대상이 아니며, 겨냥줄을 곡선으로 친 구간은 그 곡선을 기준으로 봐야 합니다.</div>';
     if(badN) html+='<div class="tiny" style="color:#FF7A7A;margin:6px 0">⚠ '+badN+'개 구간은 줄눈을 제대로 못 찾아 <b>판독불가</b>로 빼고 계산했습니다. 검출률이 낮으면 숫자를 믿지 마십시오 — 무늬나 얼룩을 줄눈으로 따라갔을 수 있습니다.</div>';
     if(aRes.inverted) html+='<div class="tiny" style="margin:6px 0">ℹ 줄눈이 블록보다 <b>밝아서</b> 반전 판독했습니다(밝은 규사 줄눈 등).</div>';
     if(wavg!=null) html+='<div class="kv"><span>줄눈 폭</span><b>평균 '+fx(wavg,2)+'mm · 최대 '+fx(wmx,2)+'mm</b></div>';
-    html+='<div class="kv"><span>사진 해상도</span><b>평균 '+fx(aRes.rect.mm,3)+' · 먼 쪽 '+fx(aRes.worstMm,3)+' mm/화소</b></div>';
+    html+='<div class="kv"><span>해상도(가까운쪽~먼쪽)</span><b>'+fx(Math.min.apply(null,aRes.rows.map(function(r){return r.mmpx;})),2)+' ~ '+fx(Math.max.apply(null,aRes.rows.map(function(r){return r.mmpx;})),2)+' mm/화소</b></div>';
+    if(aRes.persp>1.8) html+='<div class="tiny" style="margin:6px 0">ℹ 길이 멀어지는 구도라 줄눈마다 정밀도가 다릅니다(원근 '+fx(aRes.persp,1)+'배). 표의 <b>가름한계</b>보다 작은 편차는 그 줄눈에서 판별할 수 없습니다. 원근 왜곡 자체는 네 모서리로 정확히 보정됩니다.</div>';
     if(!aRes.wOK) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 줄눈이 '+fx(aRes.J/aRes.rect.mm,1)+'화소로만 찍혀 <b>폭은 판독하지 않았습니다</b>(4화소 이상 필요). 선형은 유효하나 편차가 다소 작게 나올 수 있습니다 — 폭까지 보려면 더 가까이 찍으십시오.</div>';
     html+='<div style="height:10px"></div><div class="small"><b>줄눈별 결과</b> — 줄을 누르면 판정에서 빼거나 되돌립니다</div>';
     html+='<table class="atab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">';
-    html+='<tr style="color:#8aa"><td>줄눈</td><td>구간</td><td>검출</td><td>Dmax</td><td>RMS</td><td>폭</td><td>판정</td></tr>';
+    html+='<tr style="color:#8aa"><td>줄눈</td><td>검출</td><td>해상도</td><td>가름한계</td><td>Dmax</td><td>곡선</td><td>판정</td></tr>';
     aRes.rows.forEach(function(r,i){
       html+='<tr data-i="'+i+'" style="cursor:pointer;'+(r.off?'opacity:.35;text-decoration:line-through':'')+'">'+
-        '<td>'+r.dir+' '+r.no+'</td><td>'+r.seg+'/'+r.nseg+'</td>'+
+        '<td>'+r.dir+' '+r.no+(r.nseg>1?'‑'+r.seg:'')+'</td>'+
         '<td'+(r.bad?' style="color:#FF7A7A"':'')+'>'+fx((r.det||0)*100,0)+'%</td>'+
-        '<td><b>'+(r.bad?"—":fx(r.dmax,1))+'</b></td><td>'+(r.bad?"—":fx(r.rms,2))+'</td>'+
-        '<td>'+(r.w!=null&&!r.bad?fx(r.w,2):"—")+'</td>'+
+        '<td>'+fx(r.mmpx,2)+'</td><td>±'+fx(r.prec,1)+'</td>'+
+        '<td><b>'+(r.bad?"—":fx(r.dmax,1))+'</b></td>'+
+        '<td>'+(r.curved!=null&&!r.bad?Math.round(r.curved*100)+'%':"—")+'</td>'+
         '<td class="'+(r.bad?"ng":vdCls(r.grade))+'">'+(r.bad?"판독불가":r.grade)+'</td></tr>';
     });
     html+='</table>';
@@ -2389,6 +2440,8 @@ function aRender(){
   });
 }
 aStd();
+
+
 
 
 
