@@ -2119,7 +2119,7 @@ function aStd(){
       '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
       '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
       '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
-    $("#aShoot").innerHTML="촬영 요령 — ① <b>구획 네 모서리가 모두</b> 화면에 들어오게 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 광각(초광각) 금지</b> — 원근은 펴도 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로 찍고, 판정할 줄눈을 화면 <b>가장자리에 두지 마십시오</b>.";
+    $("#aShoot").innerHTML="촬영 요령 — ① <b>블록 4~8장만</b> 담기게 가까이서 — 길 전체를 담으면 못 잽니다 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 광각(초광각) 금지</b> — 원근은 펴도 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로 찍고, 판정할 줄눈을 화면 <b>가장자리에 두지 마십시오</b>.";
   }else{
     var f=aKind==="flat";
     $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
@@ -2226,10 +2226,19 @@ function aReadPlan(){
   var claimR=wmm/hmm, ratio=claimR/appR;
   var geoBad = (ratio<0.5||ratio>2.0);
 
+  /* 원근 과다 — 구획의 가까운 변과 먼 변의 픽셀 길이 비.
+     길 전체를 멀리서 비스듬히 담으면 먼 쪽이 몇 배 짧게 찍히고,
+     그쪽 절반은 줄눈이 뭉개져 검출이 무너진다. 평균 해상도로는 안 보인다. */
+  var e1=dd(Q[0],Q[1]), e2=dd(Q[3],Q[2]);
+  var persp=Math.max(e1,e2)/Math.max(1,Math.min(e1,e2));
+  var worstMm=wmm/Math.max(1,Math.min(e1,e2));   // 먼 변 기준 = 최악 해상도
+  var perspBad = persp>2.5;
+  var resBad = worstMm > J/2;                    // 줄눈이 2화소 미만이면 선형도 못 믿는다
+
   var rect=BlockScan.rectify(aSrcCanvas(),aQuad(),wmm,hmm,{maxPx:8e6});
   if(!rect){ toast("네 점이 한 줄에 몰려 있습니다"); return; }
   // 줄눈이 4화소보다 얇게 찍히면 폭은 못 믿는다 — 실측 2.0mm 가 3.5mm 로 읽혔다
-  var wOK = rect.mmPerPxSrc <= J/4;
+  var wOK = worstMm <= J/4;
   var back=aBack(rect), rows=[], marks=[], inverted=false;
   function run(axis){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
@@ -2272,6 +2281,7 @@ function aReadPlan(){
   AM.auto=marks; AM.draw();
   aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
     geoBad:geoBad, appR:appR, claimR:claimR,
+    persp:persp, worstMm:worstMm, perspBad:perspBad, resBad:resBad,
     rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
   aRender();
 }
@@ -2308,6 +2318,12 @@ function aRender(){
     });
     var wavg=wall.length? wall.reduce(function(a,b){return a+b;},0)/wall.length : null;
     var wmx=wall.length? Math.max.apply(null,wall.map(function(v){return v;})) : null;
+    if(aRes.resBad||aRes.perspBad){
+      html+='<div class="vd ng"><div class="v1">판독 불가</div><div class="v2">사진이 이 측정에 못 미칩니다</div></div>';
+      if(aRes.resBad) html+='<div class="tiny" style="color:#FF7A7A;margin:6px 0">⚠ 구획의 <b>먼 쪽 기준 해상도가 '+fx(aRes.worstMm,3)+'mm/화소</b>입니다. 줄눈 '+aRes.J+'mm 가 <b>'+fx(aRes.J/aRes.worstMm,1)+'화소</b>로밖에 안 찍혀, 이 사진으로는 통직도를 잴 수 없습니다(최소 2화소, 권장 4화소).</div>';
+      if(aRes.perspBad) html+='<div class="tiny" style="color:#FF7A7A;margin:6px 0">⚠ <b>너무 비스듬합니다</b> — 구획의 가까운 변이 먼 변보다 '+fx(aRes.persp,1)+'배 길게 찍혔습니다. 먼 쪽 줄눈은 뭉개져 검출이 무너집니다.</div>';
+      html+='<div class="tiny" style="margin:6px 0"><b>다시 찍는 법</b> — 길 전체를 담지 마십시오. <b>블록 4~8장</b>만 들어오게 가까이서, 노면을 <b>내려다보듯</b> 찍습니다. 한 번에 한 구간씩 나눠 찍는 것이 맞습니다.</div>';
+    }
     if(aRes.geoBad){
       html+='<div class="vd ng"><div class="v1">입력 확인 필요</div><div class="v2">구획 모양과 입력한 규격이 맞지 않습니다</div></div>';
       html+='<div class="tiny" style="color:#FF7A7A;margin:8px 0">사진 속 구획은 가로:세로가 <b>'+fx(aRes.appR,2)+' : 1</b> 인데, 입력하신 값으로 계산한 실치수 비는 <b>'+fx(aRes.claimR,2)+' : 1</b> 입니다. '+
@@ -2327,7 +2343,7 @@ function aRender(){
     if(badN) html+='<div class="tiny" style="color:#FF7A7A;margin:6px 0">⚠ '+badN+'개 구간은 줄눈을 제대로 못 찾아 <b>판독불가</b>로 빼고 계산했습니다. 검출률이 낮으면 숫자를 믿지 마십시오 — 무늬나 얼룩을 줄눈으로 따라갔을 수 있습니다.</div>';
     if(aRes.inverted) html+='<div class="tiny" style="margin:6px 0">ℹ 줄눈이 블록보다 <b>밝아서</b> 반전 판독했습니다(밝은 규사 줄눈 등).</div>';
     if(wavg!=null) html+='<div class="kv"><span>줄눈 폭</span><b>평균 '+fx(wavg,2)+'mm · 최대 '+fx(wmx,2)+'mm</b></div>';
-    html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.rect.mm,3)+' mm/화소</b></div>';
+    html+='<div class="kv"><span>사진 해상도</span><b>평균 '+fx(aRes.rect.mm,3)+' · 먼 쪽 '+fx(aRes.worstMm,3)+' mm/화소</b></div>';
     if(!aRes.wOK) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 줄눈이 '+fx(aRes.J/aRes.rect.mm,1)+'화소로만 찍혀 <b>폭은 판독하지 않았습니다</b>(4화소 이상 필요). 선형은 유효하나 편차가 다소 작게 나올 수 있습니다 — 폭까지 보려면 더 가까이 찍으십시오.</div>';
     html+='<div style="height:10px"></div><div class="small"><b>줄눈별 결과</b> — 줄을 누르면 판정에서 빼거나 되돌립니다</div>';
     html+='<table class="atab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">';
@@ -2342,7 +2358,7 @@ function aRender(){
     });
     html+='</table>';
     aRes.rec={tool:"자동판독·줄눈", pos:$("#aPos").value||DB.site.loc,
-      grade:(aRes.geoBad||!live.length)?"판독불가":grade,
+      grade:(aRes.geoBad||aRes.resBad||aRes.perspBad||!live.length)?"판독불가":grade,
       main:fx(dmax,1)+"mm", std:"±"+aRes.tol+"mm",
       detail:"구간 "+live.length+"개 / 폭 평균 "+(wavg!=null?fx(wavg,2)+"mm":"—")+" / 해상도 "+fx(aRes.rect.mm,3)+"mm·화소⁻¹",
       photo:AM.snapshot(880)};
@@ -2373,6 +2389,8 @@ function aRender(){
   });
 }
 aStd();
+
+
 
 
 
