@@ -575,6 +575,7 @@ details ul{padding-left:18px;margin:7px 0}
     <h3>🔍 ④ 사진 자동판독</h3>
     <div class="btnrow">
       <button class="btn sec amode on" data-m="plan">평면 · 줄눈</button>
+      <button class="btn sec amode" data-m="auto">평면 · 자동(탭 없음)</button>
       <button class="btn sec amode" data-m="side">측면 · 요철/단차</button>
     </div>
     <div class="note" id="aIntro"></div>
@@ -608,6 +609,20 @@ details ul{padding-left:18px;margin:7px 0}
         <div><label class="lab">모따기 한쪽(mm)</label><input type="number" id="aCham" step="0.5" value="0" /></div>
       </div>
       <div class="tiny" style="margin-top:6px">모따기는 <b>줄눈 폭 보정용</b>입니다. 실측 게이지로 줄눈 하나를 재서 차이를 넣으면 이후 값이 맞춰집니다.</div>
+    </div>
+
+    <div id="aAutoIn" class="hide">
+      <div class="grid2">
+        <div><label class="lab">블록 가로(mm)</label><input type="number" id="uBw" value="300" /></div>
+        <div><label class="lab">블록 세로(mm)</label><input type="number" id="uBh" value="300" /></div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="grid2">
+        <div><label class="lab">허용 편차(mm)</label><input type="number" id="uTol" step="0.5" value="3" /></div>
+        <div><label class="lab">앞쪽 범위(%)</label><input type="number" id="uFrac" value="55" min="20" max="90" /></div>
+      </div>
+      <div class="tiny" style="margin-top:6px">입력은 <b>블록 실치수</b>뿐입니다. 구획 네 모서리도, 블록 장수도 안 받습니다 —
+        줄눈이 모이는 점(소실점)으로 원근을 스스로 풉니다. <b>앞쪽 범위</b>는 사진에서 가까운 쪽 몇 %를 볼지입니다.</div>
     </div>
 
     <div id="aSideIn" class="hide">
@@ -675,6 +690,15 @@ details ul{padding-left:18px;margin:7px 0}
     <div id="aStat" class="small" style="margin-top:9px"></div>
     <div style="height:9px"></div>
     <button class="btn" id="aRun" disabled>🔍 자동 판독</button>
+  </div>
+
+  <div class="card hide" id="uBusy">
+    <h3>🔍 판독 중…</h3>
+    <div class="small" id="uBusyTxt">사진에서 줄눈을 찾고 원근을 푸는 중입니다. 몇 초 걸립니다.</div>
+  </div>
+
+  <div class="card hide" id="uStep3">
+    <div id="uResBox"></div>
   </div>
 
   <div class="card hide" id="aStep3">
@@ -1212,14 +1236,1120 @@ details ul{padding-left:18px;margin:7px 0}
              sagitta: c[2] * Math.pow(span / 2, 2), rough: rq, rawRms: rl };
   }
 
+
+  /* ---- 블록 장수 자동 세기 ------------------------------------------
+     사용자가 블록을 세는 것이 가장 큰 오류원이다. 실측에서 11장으로
+     입력했는데 실제 4장이었고, 축척이 2.75배 어긋나 26.8mm 가 나왔다.
+     줄눈은 일정 간격 반복 무늬이므로 자기상관으로 주기를 찾으면 개수가
+     나온다. 개수는 축척과 무관해서 실치수를 몰라도 셀 수 있다. */
+  /* ⚠추세 제거를 이동평균으로 하면 안 된다. 창이 줄눈 주기와 비슷해지면
+     찾으려는 주기 성분 자체를 지워버린다(실측: 8장이 4장으로 나왔다).
+     조명 기울기만 없애면 되므로 1차식을 빼는 것으로 충분하다. */
+  function _detrend(p) {
+    var n = p.length, sx = 0, sy = 0, sxx = 0, sxy = 0, i;
+    for (i = 0; i < n; i++) { sx += i; sy += p[i]; sxx += i * i; sxy += i * p[i]; }
+    var den = n * sxx - sx * sx;
+    var a = den ? (n * sxy - sx * sy) / den : 0, b = (sy - a * sx) / n;
+    var out = new Float32Array(n);
+    for (i = 0; i < n; i++) out[i] = p[i] - (a * i + b);
+    return out;
+  }
+  function _bestPeriod(bands) {
+    if (!bands.length) return null;
+    var n = bands[0].length;
+    var lo = Math.max(4, Math.round(n / 40)), hi = Math.round(n / 2.5);
+    if (hi <= lo + 2) return null;
+    var acc = new Float64Array(hi + 1), z = 0;
+    bands.forEach(function (raw) {
+      var p = _detrend(raw), e = 0, i;
+      for (i = 0; i < n; i++) e += p[i] * p[i];
+      if (e < 1e-9) return;
+      z++;
+      for (var L = lo; L <= hi; L++) {
+        var s = 0, m = n - L;
+        for (i = 0; i < m; i++) s += p[i] * p[i + L];
+        acc[L] += s / (m * e / n);
+      }
+    });
+    if (!z) return null;
+    /* ⚠최댓값을 고르면 안 된다. 주기 신호의 자기상관은 T·2T·3T 에서 모두
+       솟으므로 배수 주기를 집어 장수가 절반·3분의1 로 나온다.
+       기본 주기는 '처음' 솟는 봉우리다 — 충분히 높은 첫 극대를 쓴다. */
+    var gv = -1e9, L2;
+    for (L2 = lo; L2 <= hi; L2++) { acc[L2] /= z; if (acc[L2] > gv) gv = acc[L2]; }
+    if (gv <= 0) return null;
+    var bi = -1;
+    for (L2 = lo + 1; L2 < hi; L2++) {
+      if (acc[L2] >= acc[L2 - 1] && acc[L2] >= acc[L2 + 1] && acc[L2] >= gv * 0.55) { bi = L2; break; }
+    }
+    if (bi < 0) { bi = lo; for (L2 = lo; L2 <= hi; L2++) if (acc[L2] > acc[bi]) bi = L2; }
+    var bv = acc[bi];
+    // 부분픽셀 보간
+    var sub = 0;
+    if (bi > lo && bi < hi) {
+      var a = acc[bi - 1], b = acc[bi], c = acc[bi + 1], de = a - 2 * b + c;
+      if (Math.abs(de) > 1e-9) sub = 0.5 * (a - c) / de;
+      if (!(sub > -1 && sub < 1)) sub = 0;
+    }
+    return { period: bi + sub, strength: bv, span: n };
+  }
+  /** rect 에서 가로·세로 블록 장수를 센다. 반환 {nc,nr,cfH,cfV} (cf=신뢰도 0~1)
+      ⚠2단계로 푼다. 엇금 배열은 세로 줄눈이 이웃 줄과 반 칸 엇갈려 있어서,
+      띠가 두 줄에 걸치면 세로 줄눈이 두 위치로 보이고 주기가 절반이 된다
+      (실측: 8장이 16장으로 나왔다). 그래서 ①먼저 줄(행) 주기를 잡고
+      ②각 줄의 '한가운데'에만 띠를 놓아 가로 주기를 센다. */
+  /* 밝기 평균만으로는 돌결(화강석 무늬)에 진다. 실측: 실사진에서 40×40 장,
+     신뢰도 0.22 로 실패했다. 결은 짧게 끊기고 줄눈은 끝까지 이어진다 —
+     그래서 '평균'이 아니라 '몇 개의 줄에서 여기가 어둡다고 하는가'를 센다.
+     선을 가로지르며 극소점을 찾아 투표시키면 이어진 선만 표가 몰린다. */
+  function _voteProfile(g, W, H, along) {
+    // along="x": 각 열을 위아래로 훑어 y 에 투표(가로줄눈 찾기)
+    var n = along === "x" ? H : W, m = along === "x" ? W : H;
+    var vote = new Float32Array(n), win = Math.max(3, Math.round(n / 60));
+    var step = Math.max(1, Math.round(m / 260));
+    for (var j = 0; j < m; j += step) {
+      var line = new Float32Array(n), i;
+      for (i = 0; i < n; i++) line[i] = along === "x" ? g[i * W + j] : g[j * W + i];
+      for (i = win; i < n - win; i++) {
+        var v = line[i], lo = true, sum = 0, c = 0;
+        for (var k = i - win; k <= i + win; k++) { if (line[k] < v - 0.001) { lo = false; break; } sum += line[k]; c++; }
+        if (!lo) continue;
+        var depth = sum / c - v;
+        if (depth > 2) vote[i] += Math.min(depth, 30);
+      }
+    }
+    return vote;
+  }
+  function estimateCounts(rect) {
+    var g = rect.g, W = rect.W, H = rect.H, NB = 14, i, x, y, s;
+    var pv = _bestPeriod([_voteProfile(g, W, H, "x")]);
+    var Tv = pv ? pv.period : H / 6;
+
+    var hb = [];                                     // ② 각 행 한가운데에만 띠를 놓는다
+    var nrows = Math.max(1, Math.round(H / Tv));
+    for (i = 0; i < nrows; i++) {
+      var yc = (i + 0.5) * (H / nrows);
+      var y0 = Math.round(yc - Tv * 0.24), y1 = Math.round(yc + Tv * 0.24);
+      if (y0 < 0 || y1 > H || y1 <= y0 || (y1 - y0) < 3) continue;
+      var bh = y1 - y0, sub = new Float32Array(bh * W);
+      for (y = 0; y < bh; y++) for (x = 0; x < W; x++) sub[y * W + x] = g[(y0 + y) * W + x];
+      hb.push(_voteProfile(sub, W, bh, "y"));
+    }
+    var ph = _bestPeriod(hb);
+    function cnt(r) { return r ? Math.max(1, Math.min(60, Math.round(r.span / r.period))) : null; }
+    return { nr: cnt(pv), nc: cnt(ph),
+             cfV: pv ? Math.max(0, Math.min(1, pv.strength)) : 0,
+             cfH: ph ? Math.max(0, Math.min(1, ph.strength)) : 0 };
+  }
+
   root.BlockScan = {
     scanGap: scanGap, gapJudge: gapJudge, curvature: curvature,
+    estimateCounts: estimateCounts,
     homography: homography, applyH: applyH, rectify: rectify,
     scanJoints: scanJoints, straightness: straightness, widths: widths,
     readValley: readValley, fitLine: fitLine, devs: devs, grade: grade
   };
 })(typeof window !== "undefined" ? window : globalThis);
 
+</script>
+<script>
+/* AUTOSCAN-BEGIN */
+/* ============================================================================
+   BlockAuto — 탭 0회 자동 판독 (의존성 없음, 오프라인)
+   ----------------------------------------------------------------------------
+   왜 탭이 필요 없나
+     나란한 줄눈은 사진에서 한 점으로 모인다(소실점). 앞쪽 줄눈 몇 개만 잡아도
+     소실점이 나오고, 직교하는 두 방향의 소실점이 나오면 원근이 통째로 풀린다.
+     → 구획 네 모서리를 손으로 찍을 이유가 사라지고, 예전 실패의 원인이던
+       "구획이 블록 격자와 어긋남"도 같이 사라진다(격자에서 직접 구했으므로).
+     남는 자유도는 가로배율·세로배율 둘뿐이고, 그건 블록 실치수가 정한다.
+
+   입력: 사진 + 블록 실치수(mm). 그게 전부다.
+
+   파이썬 시제품 _test/_vp.py · _grid.py · _auto.py 를 그대로 옮긴 것.
+   그쪽 주석에 "왜 이렇게 했는지"와 실패 기록이 남아 있다.
+   ========================================================================== */
+(function (root) {
+  "use strict";
+
+  /* ---- 작은 수치 도구 ------------------------------------------------ */
+
+  function mul3(A, B) {                       // 3x3 x 3x3
+    var C = new Float64Array(9), i, j, k, s;
+    for (i = 0; i < 3; i++) for (j = 0; j < 3; j++) {
+      s = 0; for (k = 0; k < 3; k++) s += A[i * 3 + k] * B[k * 3 + j];
+      C[i * 3 + j] = s;
+    }
+    return C;
+  }
+  function mulv3(A, v) {
+    return [A[0] * v[0] + A[1] * v[1] + A[2] * v[2],
+            A[3] * v[0] + A[4] * v[1] + A[5] * v[2],
+            A[6] * v[0] + A[7] * v[1] + A[8] * v[2]];
+  }
+  function det3(A) {
+    return A[0] * (A[4] * A[8] - A[5] * A[7])
+         - A[1] * (A[3] * A[8] - A[5] * A[6])
+         + A[2] * (A[3] * A[7] - A[4] * A[6]);
+  }
+  function inv3(A) {
+    var d = det3(A);
+    if (Math.abs(d) < 1e-14) return null;
+    var r = new Float64Array(9);
+    r[0] = (A[4] * A[8] - A[5] * A[7]) / d;
+    r[1] = (A[2] * A[7] - A[1] * A[8]) / d;
+    r[2] = (A[1] * A[5] - A[2] * A[4]) / d;
+    r[3] = (A[5] * A[6] - A[3] * A[8]) / d;
+    r[4] = (A[0] * A[8] - A[2] * A[6]) / d;
+    r[5] = (A[2] * A[3] - A[0] * A[5]) / d;
+    r[6] = (A[3] * A[7] - A[4] * A[6]) / d;
+    r[7] = (A[1] * A[6] - A[0] * A[7]) / d;
+    r[8] = (A[0] * A[4] - A[1] * A[3]) / d;
+    return r;
+  }
+  function cross3(a, b) {
+    return [a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]];
+  }
+  function norm3(a) { return Math.hypot(a[0], a[1], a[2]); }
+
+  /* 대칭 3x3 의 '가장 작은 고유값의 고유벡터'.
+     파이썬에서 SVD 로 하던 소실점 재추정을 JS 에서 대신하는 부분이다.
+     Σ w·(선·v)² 을 최소로 만드는 v = M 의 최소고유벡터. */
+  function smallestEigVec3(M) {
+    var p1 = M[1] * M[1] + M[2] * M[2] + M[5] * M[5];
+    var q = (M[0] + M[4] + M[8]) / 3, i;
+    var p2 = (M[0] - q) * (M[0] - q) + (M[4] - q) * (M[4] - q)
+           + (M[8] - q) * (M[8] - q) + 2 * p1;
+    var p = Math.sqrt(Math.max(p2 / 6, 1e-30));
+    var B = new Float64Array(9);
+    for (i = 0; i < 9; i++) B[i] = (M[i] - (i % 4 === 0 ? q : 0)) / p;
+    var r = det3(B) / 2;
+    r = Math.max(-1, Math.min(1, r));
+    var phi = Math.acos(r) / 3;
+    var e1 = q + 2 * p * Math.cos(phi);
+    var e3 = q + 2 * p * Math.cos(phi + 2 * Math.PI / 3);   // 가장 작은 쪽
+    var e2 = 3 * q - e1 - e3;
+    var lam = Math.min(e1, Math.min(e2, e3));
+    // (M - lam I) 의 영공간 = 두 행의 외적 중 가장 큰 것
+    var A = [M[0] - lam, M[1], M[2], M[3], M[4] - lam, M[5], M[6], M[7], M[8] - lam];
+    var rows = [[A[0], A[1], A[2]], [A[3], A[4], A[5]], [A[6], A[7], A[8]]];
+    var best = null, bn = -1;
+    for (i = 0; i < 3; i++) {
+      var c = cross3(rows[i], rows[(i + 1) % 3]), n = norm3(c);
+      if (n > bn) { bn = n; best = c; }
+    }
+    if (!best || bn < 1e-20) return null;
+    return [best[0] / bn, best[1] / bn, best[2] / bn];
+  }
+
+  /* ---- 영상 기본 ------------------------------------------------------ */
+
+  function grayAndSat(rgba, W, H) {
+    var n = W * H, g = new Float32Array(n), sat = new Float32Array(n), mx = new Float32Array(n);
+    for (var i = 0, j = 0; i < n; i++, j += 4) {
+      var r = rgba[j], gg = rgba[j + 1], b = rgba[j + 2];
+      g[i] = 0.299 * r + 0.587 * gg + 0.114 * b;
+      var M = r > gg ? (r > b ? r : b) : (gg > b ? gg : b);
+      var m = r < gg ? (r < b ? r : b) : (gg < b ? gg : b);
+      mx[i] = M;
+      sat[i] = M > 1 ? (M - m) / M : 0;
+    }
+    return { g: g, sat: sat, mx: mx };
+  }
+
+  /* 1차원 슬라이딩 최소/최대 (분리형). k 는 홀수. */
+  function slide1d(src, W, H, k, isMax, horiz) {
+    var out = new Float32Array(W * H), r = k >> 1, x, y, i, v, best;
+    if (horiz) {
+      for (y = 0; y < H; y++) {
+        var o = y * W;
+        for (x = 0; x < W; x++) {
+          best = isMax ? -1e30 : 1e30;
+          var a = x - r < 0 ? 0 : x - r, b = x + r >= W ? W - 1 : x + r;
+          for (i = a; i <= b; i++) { v = src[o + i]; if (isMax ? v > best : v < best) best = v; }
+          out[o + x] = best;
+        }
+      }
+    } else {
+      for (x = 0; x < W; x++) {
+        for (y = 0; y < H; y++) {
+          best = isMax ? -1e30 : 1e30;
+          var a2 = y - r < 0 ? 0 : y - r, b2 = y + r >= H ? H - 1 : y + r;
+          for (i = a2; i <= b2; i++) { v = src[i * W + x]; if (isMax ? v > best : v < best) best = v; }
+          out[y * W + x] = best;
+        }
+      }
+    }
+    return out;
+  }
+  function morph(src, W, H, k, isMax) {          // 정사각 구조요소 = 분리형 2회
+    return slide1d(slide1d(src, W, H, k, isMax, true), W, H, k, isMax, false);
+  }
+  function blur3(src, W, H) {                    // sigma≈0.7 (3탭)
+    var k = [0.2094, 0.5812, 0.2094];
+    var t = new Float32Array(W * H), o = new Float32Array(W * H), x, y, i;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      var s = 0;
+      for (i = -1; i <= 1; i++) {
+        var xx = x + i; if (xx < 0) xx = 0; if (xx >= W) xx = W - 1;
+        s += src[y * W + xx] * k[i + 1];
+      }
+      t[y * W + x] = s;
+    }
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      var s2 = 0;
+      for (i = -1; i <= 1; i++) {
+        var yy = y + i; if (yy < 0) yy = 0; if (yy >= H) yy = H - 1;
+        s2 += t[yy * W + x] * k[i + 1];
+      }
+      o[y * W + x] = s2;
+    }
+    return o;
+  }
+
+  /* 어두운 가는 선만 남긴다(블랙 톱햇 = 닫기 − 원본) */
+  function darkLines(g, W, H, k) {
+    k = k || 7;
+    var b = blur3(g, W, H);
+    var c = morph(morph(b, W, H, k, true), W, H, k, false);
+    var o = new Float32Array(W * H);
+    for (var i = 0; i < W * H; i++) {
+      var v = c[i] - b[i];
+      o[i] = v < 0 ? 0 : (v > 255 ? 255 : v);
+    }
+    return o;
+  }
+
+  /* 방향성 블랙 톱햇 — axis="v" 면 가로로만 닫아 '세로로 뻗은 선'만 남는다.
+     가로 줄눈이 세로 줄눈 찾기를 방해하지 않게 서로 지운다. */
+  function dirTophat(g, W, H, k, axis) {
+    var horiz = axis === "v";                   // 세로선을 남기려면 가로로 닫는다
+    var c = slide1d(slide1d(g, W, H, k, true, horiz), W, H, k, false, horiz);
+    var o = new Float32Array(W * H);
+    for (var i = 0; i < W * H; i++) {
+      var v = c[i] - g[i];
+      o[i] = v < 0 ? 0 : (v > 255 ? 255 : v);
+    }
+    return o;
+  }
+
+  /* 포장면: 색이 옅은(회색) 면. 식생·흙은 색이 있다. */
+  function pavingMask(sat, mx, W, H) {
+    var n = W * H, m = new Float32Array(n), i;
+    for (i = 0; i < n; i++) m[i] = (sat[i] < 0.18 && mx[i] > 40 && mx[i] < 248) ? 255 : 0;
+    m = morph(m, W, H, 5, false);               // 잡티 제거
+    m = morph(m, W, H, 11, true);               // 구멍 메우기
+    var out = new Uint8Array(n);
+    for (i = 0; i < n; i++) out[i] = m[i] > 128 ? 1 : 0;
+    return out;
+  }
+
+  /* ★앞에 보이는 것만: 포장 화소를 아래에서부터 세어 frac 만큼 담기는 높이 */
+  function nearBand(mask, W, H, frac) {
+    var rows = new Float64Array(H), y, x, tot = 0;
+    for (y = 0; y < H; y++) {
+      var s = 0, o = y * W;
+      for (x = 0; x < W; x++) s += mask[o + x];
+      rows[y] = s; tot += s;
+    }
+    if (tot <= 0) return 0;
+    var acc = 0;
+    for (y = H - 1; y >= 0; y--) {
+      acc += rows[y];
+      if (acc > tot * frac) return Math.min(H - 4, y + 1);
+    }
+    return 0;
+  }
+
+  /* 히스토그램 분위수 (값은 0..255) */
+  function pct(vals, n, p) {
+    var h = new Int32Array(257), i;
+    for (i = 0; i < n; i++) { var v = vals[i] | 0; h[v < 0 ? 0 : (v > 255 ? 255 : v)]++; }
+    var need = Math.max(1, Math.round(n * p / 100)), c = 0;
+    for (i = 0; i <= 255; i++) { c += h[i]; if (c >= need) return i; }
+    return 255;
+  }
+
+  root.BlockAutoCore = {
+    mul3: mul3, mulv3: mulv3, inv3: inv3, det3: det3, cross3: cross3, norm3: norm3,
+    smallestEigVec3: smallestEigVec3,
+    grayAndSat: grayAndSat, morph: morph, slide1d: slide1d, blur3: blur3,
+    darkLines: darkLines, dirTophat: dirTophat, pavingMask: pavingMask,
+    nearBand: nearBand, pct: pct
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+
+/* ============================================================================
+   2부 — 선분 추출 · 소실점 · 펴기
+   ========================================================================== */
+(function (root) {
+  "use strict";
+  var C = root.BlockAutoCore;
+
+  /* ---- 타일별 선분 ----------------------------------------------------
+     타일 하나마다 그 타일의 밝기 분포로 문턱을 정하고 작은 허프를 돌린다.
+     문턱이 타일마다 다르므로 흐린 줄눈도 자기 타일 안에서는 '가장 진한 선'이다.
+     예전에 국소정규화로 밝기를 나눴더니 신호까지 죽었다. 여기서는
+     '신호'가 아니라 '판단'만 구역별로 나눈다. */
+  function tileSegments(dl, mask, W, H, opt) {
+    opt = opt || {};
+    var tile = opt.tile || 110, NT = opt.ntheta || 180, keep = opt.keepPerTile || 3;
+    var minfill = opt.minfill || 0.55;
+    var ct = new Float64Array(NT), st = new Float64Array(NT), t;
+    for (t = 0; t < NT; t++) {
+      var a = Math.PI * t / NT; ct[t] = Math.cos(a); st[t] = Math.sin(a);
+    }
+    /* R 을 tile 로 두면 rho 가 범위를 넘어 clip 되고, 넘친 표가 양 끝 칸에
+       쌓여 argmax 가 그 헛봉우리만 반복해서 집는다(39타일에서 선분 3개). */
+    var R = ((tile * 1.5) | 0) + 2, RB = 2 * R + 1;
+    var acc = new Int32Array(RB * NT), sm = new Int32Array(RB * NT);
+    var segs = [];
+    var cap = (tile + 2) * (tile + 2);
+    var xsA = new Int32Array(cap), ysA = new Int32Array(cap), valA = new Float32Array(cap);
+    var rhoA = new Int32Array(cap * NT);
+
+    for (var y0 = 0; y0 < H - (tile >> 1); y0 += tile) {
+      for (var x0 = 0; x0 < W - (tile >> 1); x0 += tile) {
+        var y1 = Math.min(y0 + tile, H), x1 = Math.min(x0 + tile, W);
+        var tw = x1 - x0, th = y1 - y0, x, y, i, n = 0, inm = 0;
+        for (y = y0; y < y1; y++) for (x = x0; x < x1; x++) {
+          if (mask[y * W + x]) valA[inm++] = dl[y * W + x];
+        }
+        if (inm < tw * th * minfill || inm < 200) continue;
+        var thr = C.pct(valA, inm, 92);
+        if (thr < 4) continue;
+        n = 0;
+        for (y = y0; y < y1; y++) for (x = x0; x < x1; x++) {
+          if (mask[y * W + x] && dl[y * W + x] >= thr) { xsA[n] = x; ysA[n] = y; n++; }
+        }
+        if (n < 40) continue;
+        var cx = 0, cy = 0;
+        for (i = 0; i < n; i++) { cx += xsA[i]; cy += ysA[i]; }
+        cx /= n; cy /= n;
+        acc.fill(0);
+        for (i = 0; i < n; i++) {
+          var X = xsA[i] - cx, Y = ysA[i] - cy, base = i * NT;
+          for (t = 0; t < NT; t++) {
+            var rr = Math.round(X * ct[t] + Y * st[t]) + R;
+            if (rr < 0) rr = 0; else if (rr >= RB) rr = RB - 1;
+            rhoA[base + t] = rr;
+            acc[rr * NT + t]++;
+          }
+        }
+        /* 줄눈은 폭이 있어 표가 여러 rho 칸에 흩어진다. 한 칸만 보면 문턱을
+           못 넘는다(실측: 전 타일 탈락). 5칸을 합쳐서 본다. */
+        for (t = 0; t < NT; t++) {
+          for (var r0 = 0; r0 < RB; r0++) {
+            var s = 0;
+            for (var dd = -2; dd <= 2; dd++) {
+              var rr2 = r0 + dd; if (rr2 < 0 || rr2 >= RB) continue;
+              s += acc[rr2 * NT + t];
+            }
+            sm[r0 * NT + t] = s;
+          }
+        }
+        var minv = Math.max(20, tile * 0.8), got = 0;
+        while (got < keep) {
+          var bi = -1, bv = minv - 1;
+          for (i = 0; i < RB * NT; i++) if (sm[i] > bv) { bv = sm[i]; bi = i; }
+          if (bi < 0) break;
+          var pr = (bi / NT) | 0, pt = bi % NT;
+          for (var a3 = Math.max(0, pr - 5); a3 <= Math.min(RB - 1, pr + 5); a3++)
+            for (var b3 = Math.max(0, pt - 6); b3 <= Math.min(NT - 1, pt + 6); b3++)
+              sm[a3 * NT + b3] = 0;
+          got++;
+          var dx = st[pt], dy = -ct[pt];
+          var pmin = 1e30, pmax = -1e30, imin = -1, imax = -1, cnt = 0;
+          for (i = 0; i < n; i++) {
+            if (Math.abs(rhoA[i * NT + pt] - pr) > 2) continue;
+            cnt++;
+            var pj = xsA[i] * dx + ysA[i] * dy;
+            if (pj < pmin) { pmin = pj; imin = i; }
+            if (pj > pmax) { pmax = pj; imax = i; }
+          }
+          if (cnt < 12 || imin < 0) continue;
+          var L = pmax - pmin;
+          if (L < tile * 0.55) continue;
+          var NB = 24, seen = new Uint8Array(NB), uniq = 0;
+          for (i = 0; i < n; i++) {
+            if (Math.abs(rhoA[i * NT + pt] - pr) > 2) continue;
+            var bkt = ((xsA[i] * dx + ysA[i] * dy - pmin) / (L || 1) * (NB - 1)) | 0;
+            if (bkt < 0) bkt = 0;
+            if (bkt >= NB) bkt = NB - 1;
+            if (!seen[bkt]) { seen[bkt] = 1; uniq++; }
+          }
+          if (uniq < NB * 0.6) continue;
+          segs.push({ x0: xsA[imin], y0: ysA[imin], x1: xsA[imax], y1: ysA[imax], L: L });
+        }
+      }
+    }
+    return segs;
+  }
+
+  /* ---- 소실점 ---------------------------------------------------------- */
+
+  function lineOf(s) {
+    var l = C.cross3([s.x0, s.y0, 1], [s.x1, s.y1, 1]);
+    var n = Math.hypot(l[0], l[1]) + 1e-12;
+    return [l[0] / n, l[1] / n, l[2] / n];
+  }
+
+  /* 소실선(지평선)은 포장면을 가로지를 수 없다 — 땅은 전부 지평선 아래다.
+     이 조건을 안 걸면 두 번째 소실점이 화면 안으로 들어와 펴진 그림이
+     통째로 발산한다(실측: 플라자 샘플이 거의 다 검정이었다). */
+  function horizonOk(v1, v2, pts, margin) {
+    margin = margin == null ? 0.02 : margin;
+    var l = C.cross3(v1, v2), n = Math.hypot(l[0], l[1]);
+    if (n < 1e-12) return false;
+    var m = pts.length / 2, i, d, mxd = 1;
+    for (i = 0; i < m; i++) {
+      d = (l[0] * pts[i * 2] + l[1] * pts[i * 2 + 1] + l[2]) / n;
+      if (Math.abs(d) > mxd) mxd = Math.abs(d);
+    }
+    var pos = true, neg = true;
+    for (i = 0; i < m; i++) {
+      d = (l[0] * pts[i * 2] + l[1] * pts[i * 2 + 1] + l[2]) / n;
+      if (d <= -margin * mxd) pos = false;
+      if (d >= margin * mxd) neg = false;
+      if (!pos && !neg) return false;
+    }
+    return pos || neg;
+  }
+
+  function voteVP(segs, opt) {
+    opt = opt || {};
+    var tol = opt.tol || 1.6, iters = opt.iters || 2500;
+    var other = opt.other || null, pts = opt.pts || null;
+    var N = segs.length;
+    if (N < 4) return null;
+    var lines = [], M = new Float64Array(N * 2), D = new Float64Array(N * 2);
+    var Wt = new Float64Array(N), i;
+    for (i = 0; i < N; i++) {
+      var s = segs[i];
+      lines.push(lineOf(s));
+      M[i * 2] = (s.x0 + s.x1) / 2; M[i * 2 + 1] = (s.y0 + s.y1) / 2;
+      var dx = s.x1 - s.x0, dy = s.y1 - s.y0, nn = Math.hypot(dx, dy) + 1e-12;
+      D[i * 2] = dx / nn; D[i * 2 + 1] = dy / nn;
+      Wt[i] = s.L;
+    }
+    var ctol = Math.cos(tol * Math.PI / 180);
+    function score(v, outInl) {
+      var sc = 0, k, ux, uy, m;
+      var inf = Math.abs(v[2]) < 1e-9;
+      var vx = inf ? v[0] : v[0] / v[2], vy = inf ? v[1] : v[1] / v[2];
+      for (k = 0; k < N; k++) {
+        if (inf) { ux = vx; uy = vy; }
+        else { ux = vx - M[k * 2]; uy = vy - M[k * 2 + 1]; }
+        m = Math.hypot(ux, uy) + 1e-12;
+        var c = Math.abs((ux * D[k * 2] + uy * D[k * 2 + 1]) / m);
+        if (c >= ctol) { sc += Wt[k]; if (outInl) outInl.push(k); }
+      }
+      return sc;
+    }
+    var seed = (opt.seed || 12345) >>> 0;
+    function rnd() { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; }
+    var best = null, bestSc = -1;
+    for (var it = 0; it < iters; it++) {
+      var a = (rnd() * N) | 0, b = (rnd() * N) | 0;
+      if (a === b || a >= N || b >= N) continue;
+      var v = C.cross3(lines[a], lines[b]);
+      if (C.norm3(v) < 1e-9) continue;
+      if (other && pts && !horizonOk(other, v, pts)) continue;
+      var sc = score(v, null);
+      if (sc > bestSc) { bestSc = sc; best = v; }
+    }
+    if (!best) return null;
+    for (var rep = 0; rep < 3; rep++) {
+      var inl = [];
+      score(best, inl);
+      if (inl.length < 3) break;
+      var Mx = new Float64Array(9);
+      for (var q = 0; q < inl.length; q++) {
+        var li = lines[inl[q]], w = Wt[inl[q]];
+        for (var r = 0; r < 3; r++) for (var c2 = 0; c2 < 3; c2++)
+          Mx[r * 3 + c2] += w * li[r] * li[c2];
+      }
+      var vn = C.smallestEigVec3(Mx);
+      if (!vn) break;
+      if (other && pts && !horizonOk(other, vn, pts)) break;
+      best = vn;
+    }
+    var fin = [];
+    score(best, fin);
+    return { v: best, inl: fin };
+  }
+
+  /* ---- 펴는 변환 ------------------------------------------------------- */
+
+  /* v1 -> x 무한원점, v2 -> y 무한원점. 줄눈이 반드시 축에 맞는다. */
+  function homographyFromVPs(v1, v2) {
+    var l = C.cross3(v1, v2), n = C.norm3(l);
+    if (n < 1e-12) return null;
+    l = [l[0] / n, l[1] / n, l[2] / n];
+    var Hp = new Float64Array([1, 0, 0, 0, 1, 0, l[0], l[1], l[2]]);
+    var a1 = C.mulv3(Hp, v1), a2 = C.mulv3(Hp, v2);
+    var n1 = Math.hypot(a1[0], a1[1]) + 1e-12, n2 = Math.hypot(a2[0], a2[1]) + 1e-12;
+    var d1 = [a1[0] / n1, a1[1] / n1], d2 = [a2[0] / n2, a2[1] / n2];
+    var det = d1[0] * d2[1] - d2[0] * d1[1];
+    if (Math.abs(det) < 1e-9) return null;
+    var A = new Float64Array([d2[1] / det, -d2[0] / det, 0,
+                              -d1[1] / det, d1[0] / det, 0, 0, 0, 1]);
+    return C.mul3(A, Hp);
+  }
+
+  /* f 로 '직교화'를 하면 안 된다 — 소실점이 무한대로 정확히 안 가서
+     펴진 그림에서 줄눈이 다시 대각선이 된다(예전 실패와 똑같은 증상).
+     사영 보정은 그대로 두고, f 는 '가로배율 대 세로배율' 하나만 계산한다. */
+  function metricAspect(Ht, f, ppx, ppy) {
+    if (!f || f <= 0) return null;
+    var K = new Float64Array([f, 0, ppx, 0, f, ppy, 0, 0, 1]);
+    var Hi = C.inv3(Ht), Ki = C.inv3(K);
+    if (!Hi || !Ki) return null;
+    var e1 = C.mulv3(Hi, [1, 0, 0]), e2 = C.mulv3(Hi, [0, 1, 0]);
+    var d1 = C.mulv3(Ki, e1), d2 = C.mulv3(Ki, e2);
+    var n1 = C.norm3(d1), n2 = C.norm3(d2);
+    if (n1 < 1e-12 || n2 < 1e-12) return null;
+    d1 = [d1[0] / n1, d1[1] / n1, d1[2] / n1];
+    d2 = [d2[0] / n2, d2[1] / n2, d2[2] / n2];
+    var dot = Math.abs(d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2]);
+    var orth = Math.abs(Math.acos(Math.min(1, dot)) * 180 / Math.PI - 90);
+    var a = C.norm3(C.mulv3(Ht, C.mulv3(K, d1)));
+    var b = C.norm3(C.mulv3(Ht, C.mulv3(K, d2)));
+    if (!isFinite(a) || !isFinite(b) || b < 1e-12) return null;
+    return { ratio: a / b, orth: orth };
+  }
+
+  /* 펼 범위는 '포장이 있는 곳' 중에서도 '해상도가 쓸 만한 곳'.
+     국소배율 s = |detH| / (h3.x)^3 — 먼 쪽일수록 폭증한다. 그 구간을 넣으면
+     줄눈 주기가 통째로 묻힌다(실측: 주기가 158 <-> 64 로 널뛰었다). */
+  function rectExtent(Ht, mask, W, H, step, resRatio) {
+    step = step || 4; resRatio = resRatio || 3.0;
+    var xs = [], ys = [], x, y;
+    for (y = 0; y < H; y += step) for (x = 0; x < W; x += step)
+      if (mask[y * W + x]) { xs.push(x); ys.push(y); }
+    var n = xs.length;
+    if (n < 50) return null;
+    var dt = Math.abs(C.det3(Ht)), sc = new Float64Array(n), i;
+    for (i = 0; i < n; i++) {
+      var d = Ht[6] * xs[i] + Ht[7] * ys[i] + Ht[8];
+      sc[i] = Math.abs(d) > 1e-9 ? dt / Math.pow(Math.abs(d), 3) : Infinity;
+    }
+    var srt = [];
+    for (i = 0; i < n; i++) if (isFinite(sc[i])) srt.push(sc[i]);
+    if (!srt.length) return null;
+    srt.sort(function (a, b) { return a - b; });
+    var smin = srt[Math.floor(srt.length * 0.05)];
+    var rx = [], ry = [];
+    for (i = 0; i < n; i++) {
+      if (!isFinite(sc[i]) || sc[i] > smin * resRatio) continue;
+      var q = C.mulv3(Ht, [xs[i], ys[i], 1]);
+      if (Math.abs(q[2]) < 1e-9) continue;
+      var X = q[0] / q[2], Y = q[1] / q[2];
+      if (!isFinite(X) || !isFinite(Y)) continue;
+      rx.push(X); ry.push(Y);
+    }
+    if (rx.length < 50) return null;
+    rx.sort(function (a, b) { return a - b; });
+    ry.sort(function (a, b) { return a - b; });
+    function P(arr, p) { return arr[Math.min(arr.length - 1, Math.floor(arr.length * p / 100))]; }
+    return { x0: P(rx, 1), x1: P(rx, 99), y0: P(ry, 1), y1: P(ry, 99) };
+  }
+
+  /* 역변환으로 펴기(최근접). 가로세로비를 강제로 눌러 담으면 한 축이
+     압축돼 그 축 줄눈이 뭉개진다 -> 비는 그대로, 긴 변만 outW 로 맞춘다. */
+  function warp(srcData, sw, sh, Ht, ext, outW) {
+    var w = ext.x1 - ext.x0, h = ext.y1 - ext.y0;
+    if (!(isFinite(w) && isFinite(h)) || w <= 0 || h <= 0) return null;
+    var ow, oh;
+    if (h >= w) { oh = outW; ow = Math.max(24, Math.round(outW * w / h)); }
+    else { ow = outW; oh = Math.max(24, Math.round(outW * h / w)); }
+    var S = new Float64Array([ow / w, 0, -ext.x0 * ow / w, 0, oh / h, -ext.y0 * oh / h, 0, 0, 1]);
+    var Hf = C.mul3(S, Ht), Hi = C.inv3(Hf);
+    if (!Hi) return null;
+    var N = ow * oh;
+    var g = new Float32Array(N), sat = new Float32Array(N);
+    var mxa = new Float32Array(N), inb = new Uint8Array(N);
+    for (var y = 0; y < oh; y++) {
+      for (var x = 0; x < ow; x++) {
+        var d = Hi[6] * x + Hi[7] * y + Hi[8];
+        if (Math.abs(d) < 1e-9) continue;
+        var u = (Hi[0] * x + Hi[1] * y + Hi[2]) / d;
+        var v = (Hi[3] * x + Hi[4] * y + Hi[5]) / d;
+        if (!(u >= 0 && u < sw - 1 && v >= 0 && v < sh - 1)) continue;
+        var si = (((v + 0.5) | 0) * sw + ((u + 0.5) | 0)) * 4;
+        var r = srcData[si], gg = srcData[si + 1], b = srcData[si + 2];
+        var o = y * ow + x;
+        g[o] = 0.299 * r + 0.587 * gg + 0.114 * b;
+        var Mx = r > gg ? (r > b ? r : b) : (gg > b ? gg : b);
+        var mn = r < gg ? (r < b ? r : b) : (gg < b ? gg : b);
+        mxa[o] = Mx; sat[o] = Mx > 1 ? (Mx - mn) / Mx : 0;
+        inb[o] = 1;
+      }
+    }
+    return { g: g, sat: sat, mx: mxa, inb: inb, W: ow, H: oh, Hf: Hf };
+  }
+
+  root.BlockAutoGeom = {
+    tileSegments: tileSegments, voteVP: voteVP, horizonOk: horizonOk,
+    homographyFromVPs: homographyFromVPs, metricAspect: metricAspect,
+    rectExtent: rectExtent, warp: warp, lineOf: lineOf
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+
+/* ============================================================================
+   3부 — 줄눈 격자 · 통직도 · EXIF · 전체 파이프라인
+   ========================================================================== */
+(function (root) {
+  "use strict";
+  var C = root.BlockAutoCore, G = root.BlockAutoGeom;
+
+  /* ---- 줄눈 프로파일 ---------------------------------------------------
+     want="v": 세로 줄눈용(길이 W) / "h": 가로 줄눈용(길이 H) */
+  function jointProfile(rect, valid, want, k) {
+    k = k || 9;
+    var W = rect.W, H = rect.H;
+    var t = C.dirTophat(rect.g, W, H, k, want);
+    var n = want === "v" ? W : H, other = want === "v" ? H : W;
+    var p = new Float64Array(n), cnt = new Int32Array(n), i, j;
+    for (i = 0; i < n; i++) { p[i] = 0; cnt[i] = 0; }
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      if (!valid[y * W + x]) continue;
+      j = want === "v" ? x : y;
+      p[j] += t[y * W + x]; cnt[j]++;
+    }
+    for (i = 0; i < n; i++) {
+      p[i] = cnt[i] > other * 0.25 ? p[i] / cnt[i] : NaN;
+    }
+    return p;
+  }
+
+  /* 간격 T 로 격자를 대 봤을 때 '줄눈 자리가 평균보다 얼마나 어두운가' */
+  function gridScore(p, T, minLines) {
+    var n = p.length, i, s = 0, c = 0;
+    for (i = 0; i < n; i++) if (isFinite(p[i])) { s += p[i]; c++; }
+    if (!c || T < 6) return { sc: -1e9, ph: 0 };
+    var base = s / c, best = -1e9, bph = 0;
+    var dph = Math.max(0.5, T / 40);
+    var vals = [];
+    for (var ph = 0; ph < T; ph += dph) {
+      vals.length = 0;
+      for (var pos = ph; pos < n - 0.5; pos += T) {
+        var idx = Math.round(pos);
+        if (idx < 0 || idx >= n) continue;
+        var v = -Infinity;
+        for (var d = -1; d <= 1; d++) {
+          var q = idx + d; if (q < 0) q = 0; if (q >= n) q = n - 1;
+          if (isFinite(p[q]) && p[q] > v) v = p[q];
+        }
+        if (!isFinite(v)) continue;
+        vals.push(v);
+      }
+      if (vals.length < minLines) continue;
+      /* ★평균을 쓰면 간격이 20% 어긋나도 몇 개만 줄눈에 걸리면 점수가 살아
+         남는다(실측: 난수 씨앗만 바꿔도 축척이 0.89~1.25 로 널뜀).
+         하위 분위수를 쓰면 '한 줄이라도 헛자리에 놓이면' 바로 벌점이다.
+         30% 분위 → 줄눈 하나쯤 빠져 있어도 견딘다. */
+      vals.sort(function (a, b) { return a - b; });
+      var sc = vals[Math.floor(vals.length * 0.3)] - base;
+      if (sc > best) { best = sc; bph = ph; }
+    }
+    return { sc: best, ph: bph };
+  }
+
+  /* ★미지수는 '화소당 몇 mm' 하나뿐. 비는 블록 실치수가 정해 준다.
+     한 축씩 따로 찾으면 화강석 결(16화소 줄무늬)에 진다.
+     ⚠배수 함정: 축척을 절반으로 잡으면 간격이 두 배가 되어 '줄눈 자리에만'
+     선이 놓이므로 점수가 같다. 반대로 두 배면 블록 한가운데에 선을 놓아
+     점수가 떨어진다 → 점수가 살아 있는 것 중 '가장 큰 축척'. */
+  function fitScale(px, py, bw, bh, keep, minLines) {
+    keep = keep || 0.90; minLines = minLines || 4;
+    var nx = px.length, ny = py.length;
+    var lo = Math.max(12 / bw, 12 / bh);
+    var hi = Math.min(nx / (minLines - 1) / bw, ny / (minLines - 1) / bh);
+    if (hi <= lo * 1.05) return null;
+    var NS = 220, rows = [], i;
+    for (i = 0; i < NS; i++) {
+      var s = Math.exp(Math.log(lo) + (Math.log(hi) - Math.log(lo)) * i / (NS - 1));
+      var a = gridScore(px, s * bw, minLines), b = gridScore(py, s * bh, minLines);
+      rows.push({ s: s, sc: a.sc + b.sc, phx: a.ph, phy: b.ph, sx: a.sc, sy: b.sc });
+    }
+    var mx = -1e18;
+    for (i = 0; i < rows.length; i++) if (rows[i].sc > mx) mx = rows[i].sc;
+    if (mx <= 0) return null;
+    var pick = null;
+    for (i = 0; i < rows.length; i++) if (rows[i].sc >= mx * keep) pick = rows[i];
+    if (!pick) return null;
+    return { s: pick.s, Tx: pick.s * bw, Ty: pick.s * bh, phx: pick.phx, phy: pick.phy,
+             sx: pick.sx, sy: pick.sy, score: pick.sc };
+  }
+
+  /* 격자 근처에서 실제 골 위치를 소수점까지 */
+  function linesOf(p, T, ph, win) {
+    win = win || 0.3;
+    var n = p.length, w = Math.max(2, (T * win) | 0), out = [];
+    for (var c0 = ph; c0 < n - 0.5; c0 += T) {
+      var a = Math.max(0, Math.round(c0 - w)), b = Math.min(n, Math.round(c0 + w + 1));
+      if (b - a < 3) continue;
+      var j = -1, bv = 0;
+      for (var i = a; i < b; i++) {
+        var v = isFinite(p[i]) ? p[i] : 0;
+        if (v > bv) { bv = v; j = i; }
+      }
+      if (j < 0 || bv <= 0) continue;
+      var lo = Math.max(a, j - 2), hi = Math.min(b, j + 3), mn = Infinity;
+      for (i = lo; i < hi; i++) { var q = isFinite(p[i]) ? p[i] : 0; if (q < mn) mn = q; }
+      var sw = 0, sm = 0;
+      for (i = lo; i < hi; i++) {
+        var ww = (isFinite(p[i]) ? p[i] : 0) - mn; if (ww < 0) ww = 0;
+        sw += ww; sm += ww * i;
+      }
+      if (sw <= 0) continue;
+      out.push(sm / sw);
+    }
+    return out;
+  }
+
+  /* ★줄눈이 뻗은 방향으로만 n 화소 이동평균.
+     한 줄만 보고 중심을 잡으면 화강석 결 때문에 중심이 몇 화소씩 튄다. */
+  function smoothAlong(dl, W, H, axis, n) {
+    if (n < 2) return dl;
+    var o = new Float32Array(W * H), r = n >> 1, x, y, i;
+    if (axis === 0) {                       // 세로 줄눈 → 세로로 평균
+      for (x = 0; x < W; x++) for (y = 0; y < H; y++) {
+        var s = 0, c = 0;
+        for (i = y - r; i <= y + r; i++) { if (i < 0 || i >= H) continue; s += dl[i * W + x]; c++; }
+        o[y * W + x] = c ? s / c : 0;
+      }
+    } else {
+      for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+        var s2 = 0, c2 = 0;
+        for (i = x - r; i <= x + r; i++) { if (i < 0 || i >= W) continue; s2 += dl[y * W + i]; c2++; }
+        o[y * W + x] = c2 ? s2 / c2 : 0;
+      }
+    }
+    return o;
+  }
+
+  function fitPoly(us, cs, deg) {            // 정규방정식 (deg<=2)
+    var n = us.length, m = deg + 1, A = [], b = [], i, j, k;
+    for (i = 0; i < m; i++) { A.push(new Float64Array(m)); b.push(0); }
+    for (k = 0; k < n; k++) {
+      var pw = [1, us[k], us[k] * us[k]];
+      for (i = 0; i < m; i++) {
+        for (j = 0; j < m; j++) A[i][j] += pw[i] * pw[j];
+        b[i] += pw[i] * cs[k];
+      }
+    }
+    for (i = 0; i < m; i++) {                // 가우스 소거
+      var p = i;
+      for (k = i + 1; k < m; k++) if (Math.abs(A[k][i]) > Math.abs(A[p][i])) p = k;
+      var t = A[i]; A[i] = A[p]; A[p] = t; var tb = b[i]; b[i] = b[p]; b[p] = tb;
+      if (Math.abs(A[i][i]) < 1e-12) return null;
+      for (k = i + 1; k < m; k++) {
+        var f = A[k][i] / A[i][i];
+        for (j = i; j < m; j++) A[k][j] -= f * A[i][j];
+        b[k] -= f * b[i];
+      }
+    }
+    var x = new Float64Array(m);
+    for (i = m - 1; i >= 0; i--) {
+      var s = b[i];
+      for (j = i + 1; j < m; j++) s -= A[i][j] * x[j];
+      x[i] = s / A[i][i];
+    }
+    return x;                                 // [c0, c1, c2]
+  }
+  function polyval(c, t) {
+    var s = 0;
+    for (var i = c.length - 1; i >= 0; i--) s = s * t + c[i];
+    return s;
+  }
+
+  function centersAlong(dl, valid, W, H, ts, pred, axis, w, minlev) {
+    var L = axis === 0 ? H : W, lim = axis === 0 ? W : H;
+    var us = [], cs = [];
+    for (var q = 0; q < ts.length; q++) {
+      var t = ts[q], i = Math.round(t);
+      if (i < 0 || i >= L) continue;
+      var c0 = pred[q];
+      var a = Math.max(0, Math.round(c0 - w)), b = Math.min(lim, Math.round(c0 + w + 1));
+      if (b - a < 5) continue;
+      var okc = 0, j = -1, bv = -1, k;
+      for (k = a; k < b; k++) {
+        var idx = axis === 0 ? i * W + k : k * W + i;
+        if (valid[idx]) okc++;
+        var v = dl[idx];
+        if (v > bv) { bv = v; j = k; }
+      }
+      if (okc < (b - a) * 0.9) continue;
+      if (bv < minlev) continue;
+      var lo = Math.max(a, j - 3), hi = Math.min(b, j + 4), mn = Infinity;
+      for (k = lo; k < hi; k++) {
+        var vv = dl[axis === 0 ? i * W + k : k * W + i];
+        if (vv < mn) mn = vv;
+      }
+      var sw = 0, sm = 0;
+      for (k = lo; k < hi; k++) {
+        var ww = dl[axis === 0 ? i * W + k : k * W + i] - mn; if (ww < 0) ww = 0;
+        sw += ww; sm += ww * k;
+      }
+      if (sw <= 0) continue;
+      us.push(t); cs.push(sm / sw);
+    }
+    return { us: us, cs: cs };
+  }
+
+  /* 줄눈 하나의 통직도.
+     ★예측을 '직전 위치'로 잡으면 창을 넓힐수록 서서히 표류해 엉뚱한 구조로
+       건너간다(실측: 창 ±3화소면 검출 35%, ±9화소면 편차 31mm).
+       예측을 '직선'으로 잡고 반복하면 표류가 원천적으로 불가능하고,
+       게다가 그 직선이 곧 통직도의 기준선이다.
+     ⚠창은 화소가 아니라 mm 로 정한다(해상도가 바뀌어도 판정이 같도록). */
+  function straightness(dl, valid, W, H, at, axis, mmpx, opt) {
+    opt = opt || {};
+    var nsamp = opt.nsamp || 200, wMm = opt.wMm || 7.0, minlev = opt.minlev || 8;
+    var iters = opt.iters || 3;
+    var w = Math.max(3, Math.round(wMm / Math.max(mmpx, 1e-6)));
+    var L = axis === 0 ? H : W, i;
+    var ts = new Float64Array(nsamp);
+    for (i = 0; i < nsamp; i++) ts[i] = L * 0.03 + (L * 0.94) * i / (nsamp - 1);
+    var k = [at, 0], res = null;
+    for (var rep = 0; rep < iters; rep++) {
+      var pred = new Float64Array(nsamp);
+      for (i = 0; i < nsamp; i++) pred[i] = k[0] + k[1] * ts[i];
+      res = centersAlong(dl, valid, W, H, ts, pred, axis, w, minlev);
+      if (res.cs.length < nsamp * 0.25) return null;
+      var kk = fitPoly(res.us, res.cs, 1);
+      if (!kk) return null;
+      k = [kk[0], kk[1]];
+      var r = [], sd = 0;
+      for (i = 0; i < res.cs.length; i++) { var e = res.cs[i] - polyval(k, res.us[i]); r.push(e); sd += e * e; }
+      sd = Math.sqrt(sd / r.length);
+      if (sd > 0) {
+        var u2 = [], c2 = [];
+        for (i = 0; i < r.length; i++) if (Math.abs(r[i]) <= 2.5 * sd) { u2.push(res.us[i]); c2.push(res.cs[i]); }
+        if (u2.length >= 8) {
+          var k2 = fitPoly(u2, c2, 1);
+          if (k2) k = [k2[0], k2[1]];
+        }
+      }
+    }
+    var n = res.cs.length, r1 = new Float64Array(n), mxr = 0, ss = 0;
+    for (i = 0; i < n; i++) {
+      r1[i] = res.cs[i] - polyval(k, res.us[i]);
+      if (Math.abs(r1[i]) > mxr) mxr = Math.abs(r1[i]);
+      ss += r1[i] * r1[i];
+    }
+    var kq = fitPoly(res.us, res.cs, 2), mxc = 0;
+    if (kq) for (i = 0; i < n; i++) {
+      var e2 = Math.abs(res.cs[i] - polyval(kq, res.us[i]));
+      if (e2 > mxc) mxc = e2;
+    }
+    /* ★★재기 잡음을 편차와 갈라낸다.
+       줄눈은 이웃한 두 지점 사이에서 갑자기 꺾이지 않는다. 그러니 인접
+       표본의 '차이'는 거의 전부 재기 잡음이다 — σ = std(차이)/√2.
+       실제 휨은 천천히 변하므로 이동평균으로 남는다.
+       이렇게 안 가르면 '어느 줄눈이나 7mm' 같은 가짜 값이 나온다
+       (창 ±7화소 안에서 균등분포면 std 가 딱 4.04화소였다 = 신호 없음). */
+    var dif = [], mu = 0;
+    for (i = 1; i < n; i++) { dif.push(r1[i] - r1[i - 1]); mu += r1[i] - r1[i - 1]; }
+    mu = dif.length ? mu / dif.length : 0;
+    var vv = 0;
+    for (i = 0; i < dif.length; i++) vv += (dif[i] - mu) * (dif[i] - mu);
+    var sigN = dif.length > 2 ? Math.sqrt(vv / dif.length) / Math.SQRT2 : 0;
+    var nsm = Math.max(3, ((n * 0.06) | 0) | 1), half = nsm >> 1, dmaxS = 0;
+    for (i = half; i < n - half; i++) {
+      var s2 = 0;
+      for (var j = i - half; j <= i + half; j++) s2 += r1[j];
+      s2 = Math.abs(s2 / nsm);
+      if (s2 > dmaxS) dmaxS = s2;
+    }
+    var noise = sigN * mmpx;
+    return {
+      at: at, axis: axis, det: n / nsamp,
+      dmax: mxr * mmpx, dmaxCurve: mxc * mmpx, dmaxSig: dmaxS * mmpx,
+      rms: Math.sqrt(ss / n) * mmpx,
+      noise: noise, limit: 2 * noise, clear: dmaxS * mmpx > 2 * noise,
+      us: res.us, cs: res.cs, base: k
+    };
+  }
+
+  /* ---- EXIF: 35mm 환산 초점거리 ---------------------------------------
+     ★초점거리는 추정하지 말고 사진에서 읽는다. 소실점으로 역산하면
+       (f²=-(v1-c)·(v2-c)) 아주 불안정하다 — 실측에서 5316화소짜리를
+       689화소로 냈다. EXIF 값은 정확하고 공짜다. */
+  function exifFocal35(buf) {
+    var d = new DataView(buf), n = d.byteLength, i;
+    if (n < 12 || d.getUint16(0) !== 0xFFD8) return null;
+    var off = 2;
+    while (off + 4 < n) {
+      if (d.getUint8(off) !== 0xFF) { off++; continue; }
+      var mk = d.getUint8(off + 1);
+      if (mk === 0xD8 || mk === 0x01 || (mk >= 0xD0 && mk <= 0xD7)) { off += 2; continue; }
+      if (mk === 0xDA) break;
+      var len = d.getUint16(off + 2);
+      if (mk === 0xE1 && off + 10 < n &&
+          d.getUint32(off + 4) === 0x45786966 && d.getUint16(off + 8) === 0) {
+        var T = off + 10;
+        var le = d.getUint16(T) === 0x4949;
+        function u16(p) { return d.getUint16(p, le); }
+        function u32(p) { return d.getUint32(p, le); }
+        if (u16(T + 2) !== 0x002A) return null;
+        var ifd0 = T + u32(T + 4);
+        function findTag(base, tag) {
+          if (base + 2 > n) return null;
+          var cnt = u16(base);
+          for (var k = 0; k < cnt; k++) {
+            var e = base + 2 + k * 12;
+            if (e + 12 > n) break;
+            if (u16(e) === tag) return { type: u16(e + 2), val: u32(e + 8), ptr: e + 8 };
+          }
+          return null;
+        }
+        var ex = findTag(ifd0, 0x8769);
+        if (!ex) return null;
+        var f35 = findTag(T + ex.val, 0xA405);
+        if (!f35) return null;
+        return f35.type === 3 ? u16(f35.ptr) : f35.val;
+      }
+      off += 2 + len;
+    }
+    return null;
+  }
+  function focalPx(f35, W0, H0) {
+    if (!f35) return null;
+    return f35 * Math.hypot(W0, H0) / 43.2666;
+  }
+  /* ⚠0.5× 초광각(대개 f35≈13)은 통 왜곡이 있어 호모그래피로 못 편다.
+     실측 샘플 7장 중 3장이 초광각이었다 — 사용자는 기본으로 넓게 찍는다. */
+  function lensWarning(f35) {
+    if (!f35) return null;
+    if (f35 <= 16) return "초광각(0.5×)으로 찍혔습니다. 렌즈 휨은 펴지지 않으니 기본(1×)으로 다시 찍어 주세요.";
+    if (f35 <= 20) return "화각이 넓습니다. 가장자리 왜곡이 남을 수 있어요.";
+    return null;
+  }
+
+  /* ---- 전체 ------------------------------------------------------------
+     full : {data(RGBA), W, H}  원본 해상도 (재기용)
+     work : {data(RGBA), W, H}  축소본 (찾기용) — 없으면 full 을 쓴다 */
+  function analyze(full, work, opt) {
+    opt = opt || {};
+    var bw = opt.blockW || 300, bh = opt.blockH || 300;
+    var frac = opt.frac == null ? 0.55 : opt.frac;
+    var outW = opt.outW || 2000, f35 = opt.f35 || null;
+    var R = { f35: f35, lens: lensWarning(f35) };
+    work = work || full;
+    var W = work.W, H = work.H;
+    var gs = C.grayAndSat(work.data, W, H);
+    var mask = C.pavingMask(gs.sat, gs.mx, W, H);
+    var pavFrac = 0, i;
+    for (i = 0; i < W * H; i++) pavFrac += mask[i];
+    pavFrac /= W * H;
+    R.pav = pavFrac;
+    if (pavFrac < 0.12) {
+      R.why = "화면에서 포장이 " + Math.round(pavFrac * 100) + "%뿐입니다. 더 가까이 찍어 주세요.";
+      return R;
+    }
+    var cut = C.nearBand(mask, W, H, frac);
+    var bh2 = H - cut;
+    var sg = new Float32Array(W * bh2), sm = new Uint8Array(W * bh2);
+    for (var y = 0; y < bh2; y++) for (var x = 0; x < W; x++) {
+      sg[y * W + x] = gs.g[(y + cut) * W + x];
+      sm[y * W + x] = mask[(y + cut) * W + x];
+    }
+    var dl = C.darkLines(sg, W, bh2);
+    for (i = 0; i < W * bh2; i++) if (!sm[i]) dl[i] = 0;
+    var segs = G.tileSegments(dl, sm, W, bh2, { tile: opt.tile || 110 });
+    R.nseg = segs.length;
+    if (segs.length < 8) {
+      R.why = "줄눈선을 " + segs.length + "개밖에 못 찾았습니다.";
+      return R;
+    }
+    var pts = [];
+    for (y = 0; y < bh2; y += 10) for (x = 0; x < W; x += 10) if (sm[y * W + x]) pts.push(x, y);
+    var r1 = G.voteVP(segs, { seed: opt.seed, iters: opt.iters });
+    if (!r1 || r1.inl.length < 3) { R.why = "줄눈 방향을 못 잡았습니다."; return R; }
+    var used = {}, rest = [];
+    for (i = 0; i < r1.inl.length; i++) used[r1.inl[i]] = 1;
+    for (i = 0; i < segs.length; i++) if (!used[i]) rest.push(segs[i]);
+    var r2 = G.voteVP(rest, { other: r1.v, pts: pts, seed: opt.seed, iters: opt.iters });
+    if (!r2 || r2.inl.length < 3) { R.why = "두 방향의 줄눈을 못 갈랐습니다."; return R; }
+    R.n1 = r1.inl.length; R.n2 = r2.inl.length;
+
+    var Ht = G.homographyFromVPs(r1.v, r2.v);
+    if (!Ht) { R.why = "펴는 변환을 못 만들었습니다."; return R; }
+    var f = focalPx(f35, full.W, full.H);
+    var fWork = f ? f * W / full.W : null;
+    var asp = fWork ? G.metricAspect(Ht, fWork, W / 2, H / 2 - cut) : null;
+    if (asp) {
+      Ht = C.mul3(new Float64Array([1, 0, 0, 0, asp.ratio, 0, 0, 0, 1]), Ht);
+      R.mode = "사영 + 비복원(EXIF f)"; R.orth = asp.orth; R.aspect = asp.ratio;
+    } else {
+      R.mode = "사영만(비 미보존)";
+    }
+    var ext = G.rectExtent(Ht, sm, W, bh2);
+    if (!ext) { R.why = "펼 범위를 못 잡았습니다."; return R; }
+    /* ★찾기는 축소본, 재기는 원본 해상도로. 축소본에서 펴면 2~3mm/화소가
+       나오는데 기준이 ±3mm 라 1화소로 판정하는 꼴이 된다. */
+    var kk = W / full.W;
+    var S = new Float64Array([kk, 0, 0, 0, kk, -cut, 0, 0, 1]);
+    var HtO = C.mul3(Ht, S);
+    var rect = G.warp(full.data, full.W, full.H, HtO, ext, outW);
+    if (!rect) { R.why = "펴기 실패."; return R; }
+    R.rect = { W: rect.W, H: rect.H };
+    var pv = C.pavingMask(rect.sat, rect.mx, rect.W, rect.H);
+    var valid = new Uint8Array(rect.W * rect.H);
+    for (i = 0; i < valid.length; i++) valid[i] = (pv[i] && rect.inb[i]) ? 1 : 0;
+
+    var px = jointProfile(rect, valid, "v"), py = jointProfile(rect, valid, "h");
+    var cands = [{ a: bw, b: bh, how: "그대로" }];
+    if (opt.allowSwap !== false && bw !== bh) cands.push({ a: bh, b: bw, how: "뒤바꿈" });
+    var fits = [];
+    for (i = 0; i < cands.length; i++) {
+      var fr = fitScale(px, py, cands[i].a, cands[i].b);
+      if (fr) { fr.how = cands[i].how; fr.mm = [cands[i].a, cands[i].b]; fits.push(fr); }
+    }
+    if (!fits.length) { R.why = "줄눈 간격을 못 찾았습니다."; return R; }
+    fits.sort(function (p, q) { return q.score - p.score; });
+    var fit = fits[0];
+    if (fits.length > 1) fit.margin = fit.score / Math.max(fits[1].score, 1e-9);
+    R.fit = fit;
+    var mmpx = 1 / fit.s;
+    R.mmpx = mmpx;
+
+    var dlr = C.darkLines(rect.g, rect.W, rect.H);
+    var nsm = Math.max(3, Math.round(12 / mmpx));
+    var dlV = smoothAlong(dlr, rect.W, rect.H, 0, nsm);
+    var dlH = smoothAlong(dlr, rect.W, rect.H, 1, nsm);
+    var lx = linesOf(px, fit.Tx, fit.phx), ly = linesOf(py, fit.Ty, fit.phy);
+    var joints = [];
+    for (i = 0; i < lx.length; i++) {
+      var s1 = straightness(dlV, valid, rect.W, rect.H, lx[i], 0, mmpx);
+      if (s1) { s1.dir = "세로"; joints.push(s1); }
+    }
+    for (i = 0; i < ly.length; i++) {
+      var s2 = straightness(dlH, valid, rect.W, rect.H, ly[i], 1, mmpx);
+      if (s2) { s2.dir = "가로"; joints.push(s2); }
+    }
+    R.joints = joints;
+    R.lines = { x: lx, y: ly };
+    R.rectData = rect;
+    R.valid = valid;
+    R.ok = true;
+    return R;
+  }
+
+  root.BlockAuto = {
+    analyze: analyze, jointProfile: jointProfile, fitScale: fitScale,
+    linesOf: linesOf, straightness: straightness, smoothAlong: smoothAlong,
+    exifFocal35: exifFocal35, focalPx: focalPx, lensWarning: lensWarning,
+    gridScore: gridScore, fitPoly: fitPoly, polyval: polyval
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+
+/* AUTOSCAN-END */
 </script>
 
 <script>
@@ -2142,9 +3272,21 @@ var AM=new Measure("aCv","aWrap","aZoom");
 var aMode="plan", aPat="run", aKind="flat", aRes=null;
 
 function aStd(){
-  var plan=aMode==="plan";
+  var plan=aMode==="plan", auto=aMode==="auto";
   $("#aPlanIn").classList.toggle("hide",!plan);
-  $("#aSideIn").classList.toggle("hide",plan);
+  $("#aAutoIn").classList.toggle("hide",!auto);
+  $("#aSideIn").classList.toggle("hide",plan||auto);
+  if(auto){
+    $("#aIntro").innerHTML="<b>자동 판독</b> — 사진만 고르면 됩니다. 점을 찍을 필요가 없습니다. "+
+      "줄눈이 모이는 점(소실점)으로 원근을 풀고, 앞쪽 줄눈만 재서 <b>가름한계</b>와 함께 알려줍니다.";
+    $("#aStdBox").innerHTML=
+      '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
+      '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointLine.src+'</b></div>';
+    $("#aShoot").innerHTML="촬영 요령 — ① <b>앞쪽 바닥이 화면 아래 절반을 채우게</b> 서서 찍습니다 "+
+      "② 비스듬해도 됩니다 ③ <b>0.5× 초광각만 피하십시오</b>(렌즈 휨은 못 폅니다 — 사진에서 자동으로 가려 경고합니다) "+
+      "④ 판정이 잡음에 묻히면 앱이 «몇 배 가까이 찍으라»고 알려줍니다.";
+    aReset(); return;
+  }
   if(plan){
     $("#aIntro").innerHTML="<b>평면 자동판독</b> — 구획 네 모서리만 찍으면 원근을 펴서 줄눈 <b>선형</b>과 <b>폭</b>을 스스로 훑습니다. 축척은 블록 규격에서 나옵니다.";
     $("#aStdBox").innerHTML=
@@ -2184,6 +3326,7 @@ $$(".akind").forEach(function(b){b.onclick=function(){
 
 function aReset(){
   AM.reset(); aRes=null;
+  $("#uBusy").classList.add("hide"); $("#uStep3").classList.add("hide");
   $("#aStep2").classList.add("hide"); $("#aStep3").classList.add("hide");
   $("#aStep1").classList.remove("hide"); $("#aRun").disabled=true;
   $("#aCount").classList.add("hide"); $("#aStat").textContent="";
@@ -2192,6 +3335,16 @@ $("#aPhoto").onclick=function(){ pickPhoto("#aFile",true); };
 $("#aPick").onclick=function(){ pickPhoto("#aFile",false); };
 $("#aFile").onchange=function(e){
   var f=e.target.files&&e.target.files[0]; if(!f)return;
+  if(aMode==="auto"){
+    var fr=new FileReader();
+    fr.onload=function(ev){
+      uF35=null;
+      try{ uF35=BlockAuto.exifFocal35(ev.target.result)||null; }catch(err){}
+      AM.load(f,function(){ uRun(); });
+    };
+    fr.readAsArrayBuffer(f);
+    e.target.value=""; return;
+  }
   AM.load(f,function(){
     $("#aStep1").classList.add("hide"); $("#aStep2").classList.remove("hide");
     $("#aStep3").classList.add("hide"); AM.fit(); aPhase();
@@ -2439,6 +3592,166 @@ function aRender(){
     tr.onclick=function(){ var i=+tr.dataset.i; aRes.rows[i].off=!aRes.rows[i].off; aRender(); };
   });
 }
+
+/* ══════════════════════════════════════════════
+   ④-자동 — 탭 0회 판독
+   ----------------------------------------------
+   입력은 블록 실치수 하나. 나머지는 사진이 말해 준다.
+     소실점 2개 → 원근이 풀림 → 줄눈 간격이 축척을 정함
+   ⚠ '편차'만 내놓으면 안 된다. 이 사진으로 그 편차를 가릴 수 있는지
+     (가름한계)를 같이 내야 예전 현장 오경보(38.2mm)를 막는다.
+══════════════════════════════════════════════ */
+var uF35=null, uRes=null;
+
+function uCanvasData(img,w){
+  var c=document.createElement("canvas");
+  c.width=w; c.height=Math.max(1,Math.round(img.height*w/img.width));
+  var cx=c.getContext("2d",{willReadFrequently:true});
+  cx.drawImage(img,0,0,c.width,c.height);
+  var d=cx.getImageData(0,0,c.width,c.height);
+  return {data:d.data,W:c.width,H:c.height};
+}
+
+function uRun(){
+  $("#aStep1").classList.add("hide"); $("#aStep2").classList.add("hide");
+  $("#aStep3").classList.add("hide"); $("#uStep3").classList.add("hide");
+  $("#uBusy").classList.remove("hide");
+  /* 계산이 동기라서 바로 돌리면 '판독 중' 글자가 안 그려진다 → 한 박자 쉰다 */
+  setTimeout(function(){
+    var img=AM.img;
+    var maxW=Math.min(img.width,2600);         // 폰 메모리 보호
+    var full=uCanvasData(img,maxW);
+    var work=uCanvasData(img,Math.min(1400,maxW));
+    var R;
+    try{
+      R=BlockAuto.analyze(full,work,{
+        blockW:+$("#uBw").value||300, blockH:+$("#uBh").value||300,
+        f35:uF35, frac:(+$("#uFrac").value||55)/100
+      });
+    }catch(err){ R={ok:false,why:"판독 중 오류: "+err.message}; }
+    uRes=R; uRender();
+  },40);
+}
+
+function uRender(){
+  var R=uRes, tol=+$("#uTol").value||3, html="";
+  $("#uBusy").classList.add("hide");
+  if(R.lens) html+='<div class="tiny" style="color:#F5A524;margin-bottom:8px">⚠ '+R.lens+'</div>';
+  if(!R.ok){
+    html+='<div class="vd ng"><div class="v1">판독 불가</div><div class="v2">'+R.why+'</div></div>';
+    html+='<div class="tiny" style="margin-top:8px">대부분 <b>포장이 너무 멀거나</b> 줄눈이 흐려서입니다. '+
+          '앞쪽 바닥이 화면 아래 절반을 채우도록 다가가서 다시 찍어 주십시오.</div>';
+    html+='<div class="btnrow" style="margin-top:10px"><button class="btn sec" id="uAgain">다시</button></div>';
+    $("#uResBox").innerHTML=html; $("#uStep3").classList.remove("hide");
+    $("#uAgain").onclick=function(){ aReset(); };
+    return;
+  }
+  var js=R.joints.slice().sort(function(a,b){return b.dmaxSig-a.dmaxSig;});
+  var clear=js.filter(function(j){return j.clear;});
+  var lim=js.map(function(j){return j.limit;}).sort(function(a,b){return a-b;});
+  var limMid=lim.length?lim[lim.length>>1]:0;
+  var over=clear.filter(function(j){return j.dmaxSig>tol;});
+  var maxD=js.length?js[0].dmaxSig:0;
+
+  /* ⚠판정 순서 — '확실히 초과한 줄눈'이 하나라도 있으면 그게 결론이다.
+     다른 줄눈이 잡음에 묻혔다고 해서 찾아낸 불량을 「가름 불가」로 덮으면 안 된다.
+     초과가 없을 때에만 '가릴 수 있었나'를 따진다(못 가렸으면 유보). */
+  /* 등급 낱말은 앱 전체와 같아야 한다(기록 집계가 «합격/조건부/그 외=불량» 로 센다).
+     못 가린 경우는 '합격'이 아니라 «조건부» — 현장 실측으로 확인해야 한다는 뜻이다. */
+  var grade, sub;
+  var murky = js.length - clear.length;
+  if(over.length){
+    grade="불량";
+    sub="확실히 초과한 줄눈 "+over.length+"개 · 최대 "+fx(over[0].dmaxSig,1)+"mm / 허용 ±"+tol+"mm";
+  } else if(limMid>tol){
+    grade="조건부";
+    sub="판정 유보 — 이 사진으로는 ±"+fx(limMid,1)+"mm까지만 가립니다 (허용 ±"+tol+"mm)";
+  } else {
+    grade="합격";
+    sub="최대 편차 "+fx(maxD,1)+"mm / 허용 ±"+tol+"mm";
+  }
+  html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+sub+'</div></div>';
+  if(murky) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">줄눈 '+murky+
+    '개는 잡음에 묻혀 <b>판정하지 못했습니다</b>(합격이 아닙니다).</div>';
+
+  if(limMid>tol){
+    var need=limMid/tol;
+    html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 이 사진은 <b>±'+fx(limMid,1)+'mm</b>까지만 가립니다 — '+
+          '±'+tol+'mm 판정에는 부족합니다. <b>지금보다 '+fx(need,1)+'배 가까이</b> 찍으면 가려집니다'+
+          '(화면에 담기는 블록 수를 '+fx(need,1)+'분의 1로).</div>';
+  }
+  html+='<div class="kv"><span>축척</span><b>'+fx(R.mmpx,3)+' mm/화소</b></div>';
+  html+='<div class="kv"><span>가름한계(중앙)</span><b>±'+fx(limMid,1)+'mm</b></div>';
+  html+='<div class="kv"><span>줄눈</span><b>'+js.length+'개 (가릴 수 있는 것 '+clear.length+'개)</b></div>';
+  html+='<div class="kv"><span>줄눈 간격</span><b>가로 '+fx(R.fit.Tx,0)+' · 세로 '+fx(R.fit.Ty,0)+' 화소</b></div>';
+  if(R.fit.how==="뒤바꿈")
+    html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 입력한 <b>가로·세로가 뒤바뀐</b> 것으로 보여 자동으로 바꿔 맞췄습니다.</div>';
+  html+='<div class="kv"><span>보정</span><b>'+R.mode+(R.f35?' · f35 '+R.f35+'mm':'')+'</b></div>';
+  /* ★곡선 보도에 직선 통직도를 대면 곡률이 통째로 편차로 잡힌다.
+     2차식으로 맞춰 잔차가 확 줄면 '휜 게 아니라 원래 곡선'일 수 있다. */
+  var curvy=js.filter(function(j){return j.clear && j.dmaxCurve < j.dmaxSig*0.5;});
+  if(curvy.length>=2)
+    html+='<div class="tiny" style="color:#F5A524;margin:6px 0">줄눈 '+curvy.length+
+      '개는 <b>완만한 곡선</b> 성분이 편차의 절반 이상입니다 — 시공 불량이 아니라 '+
+      '<b>선형 자체가 곡선</b>일 수 있습니다. 겨냥줄(설계 선형)을 확인하십시오.</div>';
+
+  html+='<div style="height:10px"></div><div class="small"><b>줄눈별 결과</b></div>';
+  html+='<table class="atab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">';
+  html+='<tr style="color:#8aa"><td>줄눈</td><td>검출</td><td>편차</td><td>잡음</td><td>판정</td></tr>';
+  js.slice(0,14).forEach(function(j){
+    var st = !j.clear ? "잡음에 묻힘" : (j.dmaxSig>tol ? "초과" : "이내");
+    var c  = !j.clear ? "" : (j.dmaxSig>tol ? "ng" : "ok");
+    html+='<tr><td>'+j.dir+'</td><td>'+fx(j.det*100,0)+'%</td>'+
+          '<td><b>'+fx(j.dmaxSig,1)+'</b></td><td>±'+fx(j.noise,1)+'</td>'+
+          '<td class="'+c+'">'+st+'</td></tr>';
+  });
+  html+='</table>';
+  html+='<div style="height:10px"></div><div class="small"><b>펴진 그림</b> — 빨강·하늘색이 찾은 줄눈입니다</div>';
+  html+='<canvas id="uCv" style="width:100%;border-radius:8px;margin-top:6px"></canvas>';
+  html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="uSave">기록 저장</button>'+
+        '<button class="btn sec" id="uAgain">다시</button></div>';
+  html+='<div class="tiny" style="margin-top:8px">자동판독은 <b>1차 선별</b>입니다. '+
+        '「잡음에 묻힘」은 <b>합격이 아니라 판정 유보</b>입니다 — 더 가까이 찍거나 현장 실측으로 확인하십시오.</div>';
+  $("#uResBox").innerHTML=html;
+  $("#uStep3").classList.remove("hide");
+  uDrawRect();
+  var rec={tool:"자동판독·줄눈(탭없음)", pos:$("#aPos").value||DB.site.loc, grade:grade,
+    main:fx(maxD,1)+"mm", std:"±"+tol+"mm",
+    detail:"줄눈 "+js.length+"개(가릴 수 있는 것 "+clear.length+") / 가름한계 ±"+fx(limMid,1)+
+           "mm / 해상도 "+fx(R.mmpx,3)+"mm·화소⁻¹"+(R.f35?" / f35 "+R.f35+"mm":""),
+    photo:$("#uCv")?$("#uCv").toDataURL("image/jpeg",0.72):null};
+  $("#uSave").onclick=function(){ addRec(rec); toast("✔ 기록에 저장했습니다"); go("rec"); };
+  $("#uAgain").onclick=function(){ aReset(); };
+}
+
+/* 펴진 그림 + 찾은 줄눈 — 사용자가 눈으로 검산할 수 있어야 한다 */
+function uDrawRect(){
+  var R=uRes, rd=R.rectData, cv=$("#uCv"); if(!cv||!rd)return;
+  var W=rd.W, H=rd.H, k=Math.min(1,900/Math.max(W,H));
+  cv.width=Math.round(W*k); cv.height=Math.round(H*k);
+  var cx=cv.getContext("2d");
+  var im=cx.createImageData(W,H), d=im.data;
+  for(var i=0;i<W*H;i++){
+    var v=rd.g[i]|0; if(v<0)v=0; if(v>255)v=255;
+    d[i*4]=v; d[i*4+1]=v; d[i*4+2]=v; d[i*4+3]=255;
+  }
+  var tmp=document.createElement("canvas"); tmp.width=W; tmp.height=H;
+  tmp.getContext("2d").putImageData(im,0,0);
+  cx.drawImage(tmp,0,0,cv.width,cv.height);
+  cx.lineWidth=1;
+  cx.strokeStyle="rgba(255,80,80,.85)";
+  R.lines.x.forEach(function(x){ cx.beginPath(); cx.moveTo(x*k,0); cx.lineTo(x*k,cv.height); cx.stroke(); });
+  cx.strokeStyle="rgba(70,190,255,.85)";
+  R.lines.y.forEach(function(y){ cx.beginPath(); cx.moveTo(0,y*k); cx.lineTo(cv.width,y*k); cx.stroke(); });
+  cx.fillStyle="rgba(255,235,60,.9)";
+  R.joints.forEach(function(j){
+    for(var i=0;i<j.cs.length;i+=2){
+      if(j.axis===0) cx.fillRect(j.cs[i]*k-0.5,j.us[i]*k-0.5,1.5,1.5);
+      else cx.fillRect(j.us[i]*k-0.5,j.cs[i]*k-0.5,1.5,1.5);
+    }
+  });
+}
+
 aStd();
 
 
