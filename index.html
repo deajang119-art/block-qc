@@ -203,7 +203,7 @@ details ul{padding-left:18px;margin:7px 0}
     <button class="tile" data-go="flat">
       <div class="ic">📏</div>
       <div class="tn">③ 평탄성(FM)</div>
-      <div class="td">3m 직선자 요철 측정<br>750-1,500-750 이동</div>
+      <div class="td">3m 직선자 평탄성 측정<br>750-1,500-750 이동</div>
       <div class="ts">오목 깊이 10mm 이내</div>
     </button>
     <button class="tile" data-go="flat" data-sub="step">
@@ -363,7 +363,7 @@ details ul{padding-left:18px;margin:7px 0}
     <h3>🫧 ② 경사 검측 (수평계)</h3>
     <div class="note">
       스마트폰의 기울기 센서를 <b>물방울 수평계</b>로 사용합니다. 폰을 그대로 노면에 놓지 말고
-      <b>3m 직선자(또는 곧은 각재) 위에 올려</b> 측정해야 국부 요철에 값이 흔들리지 않습니다.
+      <b>3m 직선자(또는 곧은 각재) 위에 올려</b> 측정해야 국부 굴곡에 값이 흔들리지 않습니다.
     </div>
     <button class="btn" id="lvStart">▶ 센서 시작 (권한 허용)</button>
     <div id="lvNo" class="warnbox hide">
@@ -576,7 +576,7 @@ details ul{padding-left:18px;margin:7px 0}
     <div class="btnrow">
       <button class="btn sec amode on" data-m="plan">평면 · 줄눈</button>
       <button class="btn sec amode" data-m="auto">평면 · 자동(탭 없음)</button>
-      <button class="btn sec amode" data-m="side">측면 · 요철/단차</button>
+      <button class="btn sec amode" data-m="side">측면 · 평탄성/단차</button>
     </div>
     <div class="note" id="aIntro"></div>
   </div>
@@ -628,10 +628,20 @@ details ul{padding-left:18px;margin:7px 0}
     <div id="aSideIn" class="hide">
       <label class="lab">측정 종류</label>
       <div class="btnrow">
-        <button class="btn sec akind on" data-k="flat">요철(3m 직선자)</button>
+        <button class="btn sec akind on" data-k="flat">평탄성(3m 직선자)</button>
         <button class="btn sec akind" data-k="step">단차(짧은 자)</button>
       </div>
       <div style="height:8px"></div>
+      <div id="aDirBox">
+        <label class="lab">측선 방향</label>
+        <div class="btnrow">
+          <button class="btn sec adir on" data-d="long">종단 · 길 방향</button>
+          <button class="btn sec adir" data-d="cross">횡단 · 가로지름</button>
+        </div>
+        <div class="tiny" style="margin:6px 0 10px">★<b>경계석·측구 옆이 푹 꺼진 자리</b>는 경계선을 <b>따라</b> 길게 파입니다.
+          종단으로 재면 자가 파인 바닥을 따라가 <b>0mm로 나옵니다</b> — 그런 자리는 반드시 <b>횡단</b>으로 재십시오.
+          기준(LH 41740 3.7.1 가)은 <b>종단·횡단 두 방향 모두</b> 요구합니다.</div>
+      </div>
       <div class="grid2">
         <div><label class="lab">자 길이(mm)</label><input type="number" id="aRl" value="3000" /></div>
         <div><label class="lab">자 두께(mm)</label><input type="number" id="aRt" value="50" /></div>
@@ -729,7 +739,7 @@ details ul{padding-left:18px;margin:7px 0}
     <div class="scrollx">
       <table>
         <tr><th class="l">검측 항목</th><th>기준값</th><th class="l">근거</th></tr>
-        <tr><td class="l">평탄성(요철)</td><td>3m 직선자, 가장 오목한 곳 <b>10mm 이내</b></td><td class="l">LH 전문시방서 41740 3.7.1 가</td></tr>
+        <tr><td class="l">평탄성</td><td>3m 직선자, 가장 오목한 곳 <b>10mm 이내</b></td><td class="l">LH 전문시방서 41740 3.7.1 가</td></tr>
         <tr><td class="l">구배(경사)</td><td>명시 구배 대비 <b>±0.4%</b></td><td class="l">LH 전문시방서 41740 3.7.1 나</td></tr>
         <tr><td class="l">블록 고저차(단차)</td><td>블록-블록, 블록-경계블록 <b>2mm 이내</b></td><td class="l">LH 전문시방서 41740 3.7.1 다</td></tr>
         <tr><td class="l">줄눈 폭</td><td>밀착·균일, <b>2mm 표준</b></td><td class="l">LH 전문시방서 41740 3.4 다</td></tr>
@@ -774,7 +784,7 @@ details ul{padding-left:18px;margin:7px 0}
 
   <details>
     <summary>3. 평탄성(FM) — 왜, 무엇을, 어떻게</summary>
-    <p><b>왜</b> — 요철은 보행 걸림·전도의 직접 원인이고, 물이 고이는 자리가 되어 하부 모래층 세굴과 침하를 부릅니다. 침하는 되돌아오지 않고 커집니다.</p>
+    <p><b>왜</b> — 평탄성 불량은 보행 걸림·전도의 직접 원인이고, 물이 고이는 자리가 되어 하부 모래층 세굴과 침하를 부릅니다. 침하는 되돌아오지 않고 커집니다.</p>
     <div class="q">3.7.1 가. 완성된 블록포장의 표면은 <b>3m 직선자로 측정할 때 가장 오목한 곳의 깊이가 10mm 이내</b>여야 한다.<br>
     3.7.1 다. 블록과 블록, 블록과 경계블록의 <b>고저차는 2mm 이내</b>여야 한다.<br>
     3.7.2 가. 허용오차 범위를 벗어난 부분은 시방 요구조건에 맞도록 <b>수급인 부담으로 수정</b>되어야 한다.
@@ -1135,10 +1145,10 @@ details ul{padding-left:18px;margin:7px 0}
   }
 
   /* ---- 측면 판독: 자 밑 틈 ------------------------------------------
-     높이(요철·단차)는 정면 사진으로 못 잰다. 사진에 깊이가 없기 때문이다.
+     높이(평탄성·단차)는 정면 사진으로 못 잰다. 사진에 깊이가 없기 때문이다.
      대신 직선자를 대고 옆에서 찍으면, 자 자체가 길이 기준이 되어
      자 밑면과 포장면 사이 틈을 mm 로 읽을 수 있다. 사람이 틈새게이지로
-     하던 것과 같은 원리다. 요철(3m 자, 10mm)과 단차(짧은 자, 2mm)는
+     하던 것과 같은 원리다. 평탄성(3m 자, 10mm)과 단차(짧은 자, 2mm)는
      자 길이와 허용값만 다르고 계산은 같다.
      o.rulerT  자 두께(mm) = 편 영상에서 자 밑면의 y
      o.maxGap  아래로 훑을 깊이(mm)
@@ -1193,7 +1203,7 @@ details ul{padding-left:18px;margin:7px 0}
     return pts;
   }
 
-  /** 요철·단차 판정. o.fromMm~o.toMm 구간만 본다(FM 은 양단 750 제외). */
+  /** 평탄성·단차 판정. o.fromMm~o.toMm 구간만 본다(FM 은 양단 750 제외). */
   function gapJudge(pts, o) {
     var use = pts.filter(function (p) { return p.ok && p.s >= o.fromMm && p.s <= o.toMm; });
     if (use.length < 5) return null;
@@ -1209,7 +1219,7 @@ details ul{padding-left:18px;margin:7px 0}
    * 편차가 '완만한 곡선'인가 '들쭉날쭉'인가를 가른다.
    * 곡선 보도에 직선 기준을 대면 곡률이 통째로 편차로 잡힌다. 그건 시공
    * 불량이 아니라 선형이 곡선인 것이다. 2차식으로 맞춰 남는 잔차를 보면
-   * 구분된다 — 잔차가 작으면 곡선, 크면 진짜 요철이다.
+   * 구분된다 — 잔차가 작으면 곡선, 크면 진짜 굴곡이다.
    * 반환 {curved: 0~1(곡선으로 설명되는 비율), sagitta: 곡선의 중앙 처짐 mm, rough: 곡선 뺀 나머지 RMS}
    */
   function curvature(pts) {
@@ -3023,9 +3033,9 @@ function sumFM(){
   var cau=vals.filter(function(v){return v>std*0.8&&v<=std;}).length;
   var grade=over>0? "불량":(cau>0? "조건부":"합격");
   $("#fSum").innerHTML='<div class="vd '+vdCls(grade)+'" style="margin-top:6px"><div class="v1">'+grade+'</div>'+
-    '<div class="v2">최대 요철 '+fx(mx,1)+'mm / 기준 '+std+'mm 이내</div></div>'+
+    '<div class="v2">가장 오목한 곳 '+fx(mx,1)+'mm / 기준 '+std+'mm 이내</div></div>'+
     '<div class="kv"><span>입력 거치</span><b>'+vals.length+' / '+FM.cells.length+'</b></div>'+
-    '<div class="kv"><span>평균 요철</span><b>'+fx(av,1)+' mm</b></div>'+
+    '<div class="kv"><span>평균 오목 깊이</span><b>'+fx(av,1)+' mm</b></div>'+
     '<div class="kv"><span>기준 초과</span><b>'+over+'개소</b></div>'+
     '<div class="kv"><span>주의(기준의 80%↑)</span><b>'+cau+'개소</b></div>';
   $("#fSave").disabled=false;
@@ -3265,11 +3275,11 @@ $("#installX").onclick=function(){
    구획의 실치수가 확정된다. 실치수를 알면 사영변환이 풀려 비스듬히 찍은
    사진을 위에서 내려다본 도면(mm 좌표계)으로 펼 수 있고, 줄눈이 어디 있어야
    하는지도 안다. 그 자리만 훑으므로 맹목적 선검출보다 훨씬 안정적이다.
-   높이(요철·단차)는 사진에 깊이가 없어 정면으로는 못 잰다 → 자를 대고
+   높이(평탄성·단차)는 사진에 깊이가 없어 정면으로는 못 잰다 → 자를 대고
    옆에서 찍어 자 밑 틈을 재는 측면 모드로 푼다.
 ══════════════════════════════════════════════ */
 var AM=new Measure("aCv","aWrap","aZoom");
-var aMode="plan", aPat="run", aKind="flat", aRes=null;
+var aMode="plan", aPat="run", aKind="flat", aDir="long", aRes=null;
 
 function aStd(){
   var plan=aMode==="plan", auto=aMode==="auto";
@@ -3304,6 +3314,7 @@ function aStd(){
       : '<div class="kv"><span>고저차(단차)</span><b>'+STD.step.max+'mm 이내</b></div>'+
         '<div class="kv"><span>대상</span><b>블록‑블록 · 블록‑경계블록</b></div>'+
         '<div class="kv"><span>근거</span><b class="stdtag">'+STD.step.src+'</b></div>';
+    $("#aDirBox").classList.toggle("hide", aKind!=="flat");
     $("#aShoot").innerHTML="촬영 요령 — ① 자의 <b>옆면 전체</b>가 화면에 꽉 차게 ② 카메라를 <b>자 옆면에 정면</b>으로(위에서 내려보면 틈이 안 보임) ③ 자 밑 틈에 <b>그늘</b>이 지도록. 네 모서리는 <b>자 옆면</b>의 네 귀퉁이를 찍습니다.";
   }
   aReset();
@@ -3315,6 +3326,10 @@ $$(".amode").forEach(function(b){b.onclick=function(){
 $$(".apat").forEach(function(b){b.onclick=function(){
   $$(".apat").forEach(function(x){x.classList.remove("on");});
   b.classList.add("on"); aPat=b.dataset.p;
+};});
+$$(".adir").forEach(function(b){b.onclick=function(){
+  $$(".adir").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on"); aDir=b.dataset.d;
 };});
 $$(".akind").forEach(function(b){b.onclick=function(){
   $$(".akind").forEach(function(x){x.classList.remove("on");});
@@ -3499,8 +3514,8 @@ function aReadSide(){
   var back=aBack(rect);
   AM.auto=gp.filter(function(q){return q.ok;}).map(function(q){ return back(q.s,T+q.gap); });
   AM.draw();
-  aRes={kind:"side", r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"요철(평탄성)":"단차(고저차)",
-        mm:rect.mmPerPxSrc};
+  aRes={kind:"side", r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"평탄성":"단차(고저차)",
+        dir:aKind==="flat"?(aDir==="cross"?"횡단":"종단"):null, mm:rect.mmPerPxSrc};
   aRender();
 }
 
@@ -3568,17 +3583,41 @@ function aRender(){
       photo:AM.snapshot(880)};
   }else{
     var r=aRes.r;
-    html+='<div class="vd '+vdCls(r.grade)+'"><div class="v1">'+r.grade+'</div><div class="v2">최대 틈 '+fx(r.max,1)+'mm / 허용 '+aRes.tol+'mm</div></div>';
-    html+='<div class="kv"><span>측정 종류</span><b>'+aRes.kindName+'</b></div>';
+    /* ⚠⚠못 가린 것을 합격으로 내면 안 된다.
+       현장 스크린샷이 「최대 틈 0.0mm · 합격」인데 같은 화면에
+       「허용값이 1.8화소」 경고가 떠 있었다 — 허용값이 몇 화소도 안 되면
+       0.0mm 는 '평탄하다'가 아니라 '못 쟀다'는 뜻이다.
+       ④탭 자동판독에서 잡음과 편차를 가른 것과 같은 원칙. */
+    var resPx = aRes.tol / Math.max(aRes.mm, 1e-6);
+    var tooCoarse = resPx < 8;
+    var grade = tooCoarse ? "조건부" : r.grade;
+    html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+
+      (tooCoarse
+        ? '판정 유보 — 허용 '+aRes.tol+'mm 가 '+fx(resPx,1)+'화소뿐이라 가릴 수 없습니다'
+        : '최대 틈 '+fx(r.max,1)+'mm / 허용 '+aRes.tol+'mm')+'</div></div>';
+    if(tooCoarse)
+      html+='<div class="tiny" style="color:#F5A524;margin:6px 0">읽힌 값 '+fx(r.max,1)+
+        'mm 는 <b>판정 근거가 못 됩니다</b>. 자를 화면에 <b>'+fx(8/Math.max(resPx,1e-6),1)+
+        '배 크게</b> 담아 다시 찍으십시오.</div>';
+    /* ★종단으로 0에 가깝게 나왔다면 방향을 의심해야 한다 —
+       경계선을 따라 파인 침하는 종단으로는 원리적으로 안 잡힌다. */
+    if(!tooCoarse && aRes.dir==="종단" && r.max < aRes.tol*0.2)
+      html+='<div class="tiny" style="color:#F5A524;margin:6px 0">종단으로 거의 0이 나왔습니다. '+
+        '<b>경계석·측구 옆 침하는 종단으로는 안 잡힙니다</b>(자가 파인 바닥을 따라갑니다). '+
+        '<b>횡단</b>으로도 한 번 재 주십시오.</div>';
+    html+='<div class="kv"><span>측정 종류</span><b>'+aRes.kindName+
+      (aRes.dir?' · '+aRes.dir:'')+'</b></div>';
     html+='<div class="kv"><span>판정 구간</span><b>'+fx(aRes.skip,0)+' ~ '+fx(aRes.L-aRes.skip,0)+'mm</b></div>';
     html+='<div class="kv"><span>최대 틈 위치</span><b>자 시작점에서 '+fx(r.at,0)+'mm</b></div>';
     html+='<div class="kv"><span>평균 틈</span><b>'+fx(r.avg,2)+'mm</b></div>';
     html+='<div class="kv"><span>측점 수</span><b>'+r.n+'개</b></div>';
     html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.mm,3)+' mm/화소</b></div>';
-    if(aRes.tol/aRes.mm<8) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 허용값이 '+fx(aRes.tol/aRes.mm,1)+'화소밖에 안 됩니다. 자를 화면에 더 크게 담아 다시 찍으십시오.</div>';
-    aRes.rec={tool:"자동판독·"+aRes.kindName, pos:$("#aPos").value||DB.site.loc, grade:r.grade,
-      main:fx(r.max,1)+"mm", std:aRes.tol+"mm 이내",
-      detail:"구간 "+fx(aRes.skip,0)+"~"+fx(aRes.L-aRes.skip,0)+"mm / 측점 "+r.n+"개 / 최대 위치 "+fx(r.at,0)+"mm",
+    
+    aRes.rec={tool:"자동판독·"+aRes.kindName+(aRes.dir?"("+aRes.dir+")":""),
+      pos:$("#aPos").value||DB.site.loc, grade:grade,
+      main:(tooCoarse?"판정 유보":fx(r.max,1)+"mm"), std:aRes.tol+"mm 이내",
+      detail:(tooCoarse?"해상도 부족(허용값 "+fx(resPx,1)+"화소) — 다시 촬영 필요 / ":"")+
+             "구간 "+fx(aRes.skip,0)+"~"+fx(aRes.L-aRes.skip,0)+"mm / 측점 "+r.n+"개 / 최대 위치 "+fx(r.at,0)+"mm",
       photo:AM.snapshot(880)};
   }
   html+='<img class="thumb" src="'+aRes.rec.photo+'" alt="판독 결과" />';
