@@ -990,11 +990,36 @@ details ul{padding-left:18px;margin:7px 0}
     // 스테이션 폭 — 잡음은 줄지만, 줄눈이 기울어 있으면 골이 뭉개져 변위를 눌러버린다
     var hx = Math.max(0, Math.round((o.avgMm == null ? step * 0.3 : o.avgMm) * k));
     var minC = o.minContrast == null ? 10 : o.minContrast;
+
+    /* --- 극성 판별 -------------------------------------------------
+       검출기는 "줄눈이 블록보다 어둡다"를 전제로 골(valley)을 찾는다.
+       밝은 규사로 채운 줄눈이나 어두운 블록에서는 전제가 뒤집혀 전부
+       빗나간다. 줄눈이 있어야 할 자리와 블록 한가운데의 밝기를 비교해
+       뒤집혔으면 부호를 바꾼다. */
+    function at(cross, along) {
+      var a = Math.round(cross * k), b = Math.round(along * k);
+      if (horiz) { return (a < 0 || a >= H || b < 0 || b >= W) ? null : g[a * W + b]; }
+      return (a < 0 || a >= W || b < 0 || b >= H) ? null : g[b * W + a];
+    }
+    var pol = o.polarity;
+    if (!pol) {
+      var jsum = 0, jn = 0, bsum = 0, bn = 0;
+      for (var pj = 0; pj < o.count; pj++) {
+        var cj = o.first + pj * o.pitch, cb = cj + o.pitch / 2;
+        for (var ss = spanMm * 0.1; ss < spanMm * 0.9; ss += spanMm / 40) {
+          var va = at(cj, ss); if (va != null) { jsum += va; jn++; }
+          var vb = at(cb, ss); if (vb != null) { bsum += vb; bn++; }
+        }
+      }
+      pol = (jn && bn && (jsum / jn) > (bsum / bn)) ? -1 : 1;
+    }
+
     var out = [];
     for (var j = 0; j < o.count; j++) {
       var pos0 = o.first + j * o.pitch;
-      var pts = [];
+      var pts = [], tried = 0;
       for (var s = step / 2; s < spanMm; s += step) {
+        tried++;
         var t0 = Math.round((pos0 - win) * k), t1 = Math.round((pos0 + win) * k);
         if (t0 < 0 || t1 >= (horiz ? H : W)) continue;
         var n = t1 - t0 + 1, prof = new Float32Array(n), sp = Math.round(s * k);
@@ -1006,7 +1031,7 @@ details ul{padding-left:18px;margin:7px 0}
           cnt++;
         }
         if (!cnt) continue;
-        for (var t3 = 0; t3 < n; t3++) prof[t3] /= cnt;
+        for (var t3 = 0; t3 < n; t3++) prof[t3] = pol * prof[t3] / cnt;
         var v = readValley(prof);
         if (!v) continue;
         var cm = o.center || "grad";
@@ -1015,7 +1040,8 @@ details ul{padding-left:18px;margin:7px 0}
         pts.push({ s: s, d: (t0 + cc) / k, w: v.w / k, wg: v.wg == null ? null : v.wg / k,
                    ok: v.contrast >= minC, contrast: v.contrast });
       }
-      out.push({ idx: j, pos: pos0, pts: pts });
+      // tried = 시도한 스테이션 수. pts 길이와 비교하면 검출률이 나온다
+      out.push({ idx: j, pos: pos0, pts: pts, tried: tried, pol: pol });
     }
     return out;
   }
@@ -1455,6 +1481,17 @@ function Measure(cvId,wrapId,zoomId){
       x.strokeStyle="#fff"; x.lineWidth=1.2; x.stroke(); x.restore(); }
     if(P.scale.length===2) L(P.scale[0],P.scale[1],"#F5A524",2.5);
     if(P.ruler.length===2) L(P.ruler[0],P.ruler[1],"#4FC3F7",2.5);
+    /* 자동판독 — 구획 네 모서리와 검출 지점. 이게 없으면 기록만 보고는
+       앱이 어디를 줄눈으로 봤는지 알 수 없어 원인을 못 짚는다. */
+    if(P.quad&&P.quad.length===4){
+      for(var qq=0;qq<4;qq++) L(P.quad[qq],P.quad[(qq+1)%4],"#4FC3F7",2.5);
+      P.quad.forEach(function(q){D(q,"#4FC3F7",5);});
+    }
+    if(this.auto&&this.auto.length){
+      x.save(); x.fillStyle="#FF3B30";
+      this.auto.forEach(function(q){ x.beginPath(); x.arc(q.x*s,q.y*s,2,0,6.284); x.fill(); });
+      x.restore();
+    }
     var rl=this.refLine();
     if(rl){ var big=1e5;
       L({x:rl.p.x-rl.d.x*big,y:rl.p.y-rl.d.y*big},{x:rl.p.x+rl.d.x*big,y:rl.p.y+rl.d.y*big},"#22C55E",2,[9,7]);
@@ -1965,7 +2002,7 @@ $("#recClear").onclick=function(){
   DB.recs=[]; save(); renderRecs(); renderHome();
 };
 $("#recCsv").onclick=function(){
-  if(!DB.recs.length){alert("기록이 없습니다.");return;}
+  if(!DB.recs.length){toast("기록이 없습니다");return;}
   var s=DB.site;
   var rows=[["현장",s.name],["위치",s.loc],["검측일",s.date],["검측자",s.who],["포장종류",s.type],["블록규격",s.spec],[""],
     ["일시","검측항목","위치","측정값","기준","판정","상세"]];
@@ -1979,7 +2016,7 @@ function dl(txt,mime,name){
   document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},800);
 }
 $("#recPrint").onclick=function(){
-  if(!DB.recs.length){alert("기록이 없습니다.");return;}
+  if(!DB.recs.length){toast("기록이 없습니다");return;}
   var s=DB.site;
   var n=DB.recs.length, ok=DB.recs.filter(function(r){return r.grade==="합격";}).length;
   var cau=DB.recs.filter(function(r){return r.grade==="조건부";}).length, ng=n-ok-cau;
@@ -2082,7 +2119,7 @@ function aStd(){
       '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
       '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
       '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
-    $("#aShoot").innerHTML="촬영 요령 — ① <b>구획 네 모서리가 모두</b> 화면에 들어오게 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다.";
+    $("#aShoot").innerHTML="촬영 요령 — ① <b>구획 네 모서리가 모두</b> 화면에 들어오게 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 광각(초광각) 금지</b> — 원근은 펴도 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로 찍고, 판정할 줄눈을 화면 <b>가장자리에 두지 마십시오</b>.";
   }else{
     var f=aKind==="flat";
     $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
@@ -2178,11 +2215,22 @@ function aReadPlan(){
   var nc=+$("#aNc").value, nr=+$("#aNr").value;
   var tol=+$("#aTol").value||3, seg=+$("#aSeg").value||10, cham=+$("#aCham").value||0;
   var wmm=nc*W+(nc-1)*J, hmm=nr*H+(nr-1)*J;
+
+  /* 기하 정합 검사 — 화면에 보이는 구획 비율과 입력한 실치수 비율을 맞대본다.
+     블록 가로·세로를 뒤바꿔 넣으면 검출률은 100% 로 나오면서 값만 틀린다
+     (실측: 조건부 3.5mm 가 불량 4.8mm 로, 줄눈폭 2.0mm 가 6.65mm 로).
+     비스듬히 찍으면 원근 때문에 비율이 다소 달라지지만 2배를 넘지는 않는다. */
+  var Q=AM.pts.quad;
+  function dd(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+  var appR=((dd(Q[0],Q[1])+dd(Q[3],Q[2]))/2)/Math.max(1,(dd(Q[0],Q[3])+dd(Q[1],Q[2]))/2);
+  var claimR=wmm/hmm, ratio=claimR/appR;
+  var geoBad = (ratio<0.5||ratio>2.0);
+
   var rect=BlockScan.rectify(aSrcCanvas(),aQuad(),wmm,hmm,{maxPx:8e6});
   if(!rect){ toast("네 점이 한 줄에 몰려 있습니다"); return; }
   // 줄눈이 4화소보다 얇게 찍히면 폭은 못 믿는다 — 실측 2.0mm 가 3.5mm 로 읽혔다
   var wOK = rect.mmPerPxSrc <= J/4;
-  var back=aBack(rect), rows=[], marks=[];
+  var back=aBack(rect), rows=[], marks=[], inverted=false;
   function run(axis){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
     var acr   = axis==="h" ? H : W;      // 줄눈이 늘어서는 방향
@@ -2198,13 +2246,21 @@ function aReadPlan(){
         var m = axis==="h" ? back(q.s,q.d) : back(q.d,q.s);
         marks.push(m);
       });
+      /* 검출률 — 시도한 스테이션 중 몇 곳에서 줄눈을 실제로 찾았나.
+         낮으면 숫자를 내면 안 된다. 살아남은 몇 점으로 계산한 값은
+         줄눈이 아니라 무늬·얼룩을 따라간 값일 수 있다. */
+      var okN=0, cSum=0;
+      jt.pts.forEach(function(q){ if(q.ok){ okN++; cSum+=q.contrast; } });
+      var det = jt.tried? okN/jt.tried : 0;
+      var cAvg = okN? cSum/okN : 0;
+      if(jt.pol===-1) inverted=true;
       var segs=BlockScan.straightness(jt,{segLenMm:segLen, spanMm:span, tol:tol});
       var wd=BlockScan.widths(jt);
       segs.forEach(function(r,k){
         if(r.skip) return;
         rows.push({dir:axis==="h"?"가로":"세로", no:i+1, seg:k+1, nseg:segs.length,
           from:r.from, to:r.to, n:r.n, dmax:r.dmax, rms:r.rms, over:r.over, overP:r.overP,
-          min:r.min, max:r.max, grade:r.grade,
+          min:r.min, max:r.max, grade:r.grade, det:det, cAvg:cAvg, bad:(det<0.6||cAvg<14),
           w: (wOK&&wd)? wd.avg-2*cham : null, wmax: (wOK&&wd)? wd.max-2*cham : null,
           wsd: (wOK&&wd)? wd.sd : null, off:false});
       });
@@ -2214,7 +2270,8 @@ function aReadPlan(){
   if(aPat==="stack") run("v");
   if(!rows.length){ toast("줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요"); return; }
   AM.auto=marks; AM.draw();
-  aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK,
+  aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
+    geoBad:geoBad, appR:appR, claimR:claimR,
     rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
   aRender();
 }
@@ -2240,7 +2297,8 @@ function aReadSide(){
 function aRender(){
   var html="";
   if(aRes.kind==="plan"){
-    var live=aRes.rows.filter(function(r){return !r.off;});
+    var live=aRes.rows.filter(function(r){return !r.off && !r.bad;});
+    var badN=aRes.rows.filter(function(r){return r.bad;}).length;
     var dmax=0, grade="합격", wall=[];
     live.forEach(function(r){
       if(r.dmax>dmax) dmax=r.dmax;
@@ -2250,24 +2308,41 @@ function aRender(){
     });
     var wavg=wall.length? wall.reduce(function(a,b){return a+b;},0)/wall.length : null;
     var wmx=wall.length? Math.max.apply(null,wall.map(function(v){return v;})) : null;
-    html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 편차 '+fx(dmax,1)+'mm / 허용 ±'+aRes.tol+'mm</div></div>';
+    if(aRes.geoBad){
+      html+='<div class="vd ng"><div class="v1">입력 확인 필요</div><div class="v2">구획 모양과 입력한 규격이 맞지 않습니다</div></div>';
+      html+='<div class="tiny" style="color:#FF7A7A;margin:8px 0">사진 속 구획은 가로:세로가 <b>'+fx(aRes.appR,2)+' : 1</b> 인데, 입력하신 값으로 계산한 실치수 비는 <b>'+fx(aRes.claimR,2)+' : 1</b> 입니다. '+
+        '<b>블록 가로·세로</b>가 뒤바뀌었거나 <b>블록 장수</b>의 가로·세로가 뒤바뀐 것으로 보입니다.<br>'+
+        '⚠이 상태로도 숫자는 나오지만 <b>틀린 값</b>입니다 — 실측에서 「조건부 3.5mm」가 「불량 4.8mm」로, 줄눈폭 2.0mm가 6.65mm로 나온 사례가 있습니다. 값을 고쳐 다시 판독하십시오.</div>';
+    }
+    if(!live.length){
+      html+='<div class="vd ng"><div class="v1">판독 실패</div><div class="v2">줄눈을 제대로 찾지 못했습니다</div></div>';
+      html+='<div class="tiny" style="margin:8px 0">아래를 확인하십시오 — ① <b>구획 네 모서리</b>가 블록 모서리에 정확히 찍혔는지 ② <b>블록 장수</b>가 네 모서리 안에 온전히 든 개수인지 ③ <b>블록 가로·세로</b>가 구획의 가로·세로 방향과 맞는지(90° 돌아가면 전부 어긋납니다) ④ 줄눈이 사진에서 충분히 구분되는지.</div>';
+    } else {
+      html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 편차 '+fx(dmax,1)+'mm / 허용 ±'+aRes.tol+'mm</div></div>';
+    }
     html+='<div class="kv"><span>판정 구간</span><b>블록 '+aRes.seg+'장 단위</b></div>';
     html+='<div class="kv"><span>검사한 줄눈</span><b>'+live.length+'구간 (전체 '+aRes.rows.length+')</b></div>';
+    var detAvg=aRes.rows.reduce(function(a,r){return a+(r.det||0);},0)/(aRes.rows.length||1);
+    html+='<div class="kv"><span>줄눈 검출률</span><b>'+fx(detAvg*100,0)+'%</b></div>';
+    if(badN) html+='<div class="tiny" style="color:#FF7A7A;margin:6px 0">⚠ '+badN+'개 구간은 줄눈을 제대로 못 찾아 <b>판독불가</b>로 빼고 계산했습니다. 검출률이 낮으면 숫자를 믿지 마십시오 — 무늬나 얼룩을 줄눈으로 따라갔을 수 있습니다.</div>';
+    if(aRes.inverted) html+='<div class="tiny" style="margin:6px 0">ℹ 줄눈이 블록보다 <b>밝아서</b> 반전 판독했습니다(밝은 규사 줄눈 등).</div>';
     if(wavg!=null) html+='<div class="kv"><span>줄눈 폭</span><b>평균 '+fx(wavg,2)+'mm · 최대 '+fx(wmx,2)+'mm</b></div>';
     html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.rect.mm,3)+' mm/화소</b></div>';
     if(!aRes.wOK) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 줄눈이 '+fx(aRes.J/aRes.rect.mm,1)+'화소로만 찍혀 <b>폭은 판독하지 않았습니다</b>(4화소 이상 필요). 선형은 유효하나 편차가 다소 작게 나올 수 있습니다 — 폭까지 보려면 더 가까이 찍으십시오.</div>';
     html+='<div style="height:10px"></div><div class="small"><b>줄눈별 결과</b> — 줄을 누르면 판정에서 빼거나 되돌립니다</div>';
     html+='<table class="atab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">';
-    html+='<tr style="color:#8aa"><td>줄눈</td><td>구간</td><td>측점</td><td>Dmax</td><td>RMS</td><td>폭</td><td>판정</td></tr>';
+    html+='<tr style="color:#8aa"><td>줄눈</td><td>구간</td><td>검출</td><td>Dmax</td><td>RMS</td><td>폭</td><td>판정</td></tr>';
     aRes.rows.forEach(function(r,i){
       html+='<tr data-i="'+i+'" style="cursor:pointer;'+(r.off?'opacity:.35;text-decoration:line-through':'')+'">'+
-        '<td>'+r.dir+' '+r.no+'</td><td>'+r.seg+'/'+r.nseg+'</td><td>'+r.n+'</td>'+
-        '<td><b>'+fx(r.dmax,1)+'</b></td><td>'+fx(r.rms,2)+'</td>'+
-        '<td>'+(r.w!=null?fx(r.w,2):"—")+'</td>'+
-        '<td class="'+vdCls(r.grade)+'">'+r.grade+'</td></tr>';
+        '<td>'+r.dir+' '+r.no+'</td><td>'+r.seg+'/'+r.nseg+'</td>'+
+        '<td'+(r.bad?' style="color:#FF7A7A"':'')+'>'+fx((r.det||0)*100,0)+'%</td>'+
+        '<td><b>'+(r.bad?"—":fx(r.dmax,1))+'</b></td><td>'+(r.bad?"—":fx(r.rms,2))+'</td>'+
+        '<td>'+(r.w!=null&&!r.bad?fx(r.w,2):"—")+'</td>'+
+        '<td class="'+(r.bad?"ng":vdCls(r.grade))+'">'+(r.bad?"판독불가":r.grade)+'</td></tr>';
     });
     html+='</table>';
-    aRes.rec={tool:"자동판독·줄눈", pos:$("#aPos").value||DB.site.loc, grade:grade,
+    aRes.rec={tool:"자동판독·줄눈", pos:$("#aPos").value||DB.site.loc,
+      grade:(aRes.geoBad||!live.length)?"판독불가":grade,
       main:fx(dmax,1)+"mm", std:"±"+aRes.tol+"mm",
       detail:"구간 "+live.length+"개 / 폭 평균 "+(wavg!=null?fx(wavg,2)+"mm":"—")+" / 해상도 "+fx(aRes.rect.mm,3)+"mm·화소⁻¹",
       photo:AM.snapshot(880)};
@@ -2298,6 +2373,10 @@ function aRender(){
   });
 }
 aStd();
+
+
+
+
 
 
 
