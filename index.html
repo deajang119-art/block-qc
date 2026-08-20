@@ -170,6 +170,7 @@ details ul{padding-left:18px;margin:7px 0}
   <button data-v="joint">① 줄눈</button>
   <button data-v="slope">② 경사</button>
   <button data-v="flat">③ 평탄성·단차</button>
+  <button data-v="auto">④ 자동판독</button>
   <button data-v="rec">기록</button>
   <button data-v="std">기준·근거</button>
 </nav>
@@ -210,6 +211,11 @@ details ul{padding-left:18px;margin:7px 0}
       <div class="tn">③-2 단차</div>
       <div class="td">블록-블록 / 블록-경계석<br>고저차 측정</div>
       <div class="ts">고저차 2mm 이내</div>
+    </button>
+    <button class="tile" data-go="auto">
+      <div class="ic">🔍</div>
+      <div class="tt">④ 사진 자동판독</div>
+      <div class="ts">구획만 잡으면 줄눈·틈을 스스로 훑는다</div>
     </button>
     <button class="tile" data-go="rec">
       <div class="ic">🗂</div>
@@ -556,6 +562,119 @@ details ul{padding-left:18px;margin:7px 0}
 </section>
 
 <!-- ══════════ RECORDS ══════════ -->
+
+<!-- ══════════ ④ 사진 자동판독 ══════════ -->
+<section id="v-auto" class="hide">
+  <div class="card">
+    <h3>🔍 ④ 사진 자동판독</h3>
+    <div class="btnrow">
+      <button class="btn sec amode on" data-m="plan">평면 · 줄눈</button>
+      <button class="btn sec amode" data-m="side">측면 · 요철/단차</button>
+    </div>
+    <div class="note" id="aIntro"></div>
+  </div>
+
+  <div class="card" id="aStep1">
+    <div class="steps"><div class="on"></div><div></div><div></div></div>
+    <h3>1단계 · 규격 입력</h3>
+    <div id="aStdBox"></div>
+    <div style="height:10px"></div>
+
+    <div id="aPlanIn">
+      <div class="grid2">
+        <div><label class="lab">블록 가로(mm)</label><input type="number" id="aBw" value="200" /></div>
+        <div><label class="lab">블록 세로(mm)</label><input type="number" id="aBh" value="100" /></div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="grid2">
+        <div><label class="lab">줄눈 목표(mm)</label><input type="number" id="aBj" step="0.5" value="2" /></div>
+        <div><label class="lab">허용 편차(mm)</label><input type="number" id="aTol" step="0.5" value="3" /></div>
+      </div>
+      <div style="height:8px"></div>
+      <label class="lab">배열 방식</label>
+      <div class="btnrow">
+        <button class="btn sec apat on" data-p="run">엇금(벽돌형)</button>
+        <button class="btn sec apat" data-p="stack">일렬(바둑판형)</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="grid2">
+        <div><label class="lab">판정구간(블록 장수)</label><input type="number" id="aSeg" value="10" min="3" /></div>
+        <div><label class="lab">모따기 한쪽(mm)</label><input type="number" id="aCham" step="0.5" value="0" /></div>
+      </div>
+      <div class="tiny" style="margin-top:6px">모따기는 <b>줄눈 폭 보정용</b>입니다. 실측 게이지로 줄눈 하나를 재서 차이를 넣으면 이후 값이 맞춰집니다.</div>
+    </div>
+
+    <div id="aSideIn" class="hide">
+      <label class="lab">측정 종류</label>
+      <div class="btnrow">
+        <button class="btn sec akind on" data-k="flat">요철(3m 직선자)</button>
+        <button class="btn sec akind" data-k="step">단차(짧은 자)</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="grid2">
+        <div><label class="lab">자 길이(mm)</label><input type="number" id="aRl" value="3000" /></div>
+        <div><label class="lab">자 두께(mm)</label><input type="number" id="aRt" value="50" /></div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="grid2">
+        <div><label class="lab">허용값(mm)</label><input type="number" id="aGtol" step="0.5" value="10" /></div>
+        <div><label class="lab">양단 제외(mm)</label><input type="number" id="aSkip" value="750" /></div>
+      </div>
+    </div>
+
+    <div style="height:10px"></div>
+    <label class="lab">측선/위치</label>
+    <input type="text" id="aPos" placeholder="예: A열 3m 측선" />
+    <div style="height:10px"></div>
+    <button class="btn" id="aPhoto">📷 사진 촬영 / 선택</button>
+    <div class="tiny" id="aShoot" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card hide" id="aStep2">
+    <div class="steps"><div class="on"></div><div class="on"></div><div></div></div>
+    <div class="banner"><span class="dot" id="aBn">1</span><span id="aBnTxt"></span></div>
+    <div class="cvwrap" id="aWrap">
+      <canvas id="aCv"></canvas>
+      <svg class="reticle" width="70" height="70" viewBox="0 0 70 70">
+        <circle cx="35" cy="35" r="15" fill="none" stroke="#4FC3F7" stroke-width="1.2" opacity=".9"/>
+        <line x1="35" y1="4" x2="35" y2="26" stroke="#4FC3F7" stroke-width="1.2"/>
+        <line x1="35" y1="44" x2="35" y2="66" stroke="#4FC3F7" stroke-width="1.2"/>
+        <line x1="4" y1="35" x2="26" y2="35" stroke="#4FC3F7" stroke-width="1.2"/>
+        <line x1="44" y1="35" x2="66" y2="35" stroke="#4FC3F7" stroke-width="1.2"/>
+        <circle cx="35" cy="35" r="1.6" fill="#FF5252"/>
+      </svg>
+      <div class="zoomtag" id="aZoom">×1.0</div>
+    </div>
+    <div class="tiny" style="margin:7px 0">끌어 이동 · 두 손가락 확대 → 조준점(⊕)을 모서리에 맞추고 «점 찍기». <b>좌상 → 우상 → 우하 → 좌하</b> 순서입니다.</div>
+    <div class="btnrow">
+      <button class="btn" id="aAdd">⊕ 점 찍기</button>
+      <button class="btn gray" id="aUndo">↩ 취소</button>
+    </div>
+    <div style="height:7px"></div>
+    <div class="btnrow">
+      <button class="btn sec" id="aFit">전체보기</button>
+      <button class="btn sec" id="aRestart">다시</button>
+    </div>
+    <div id="aCount" class="hide" style="margin-top:10px">
+      <label class="lab">구획 안 블록 장수</label>
+      <div class="grid2">
+        <div><input type="number" id="aNc" placeholder="가로 장수" /></div>
+        <div><input type="number" id="aNr" placeholder="세로 장수" /></div>
+      </div>
+      <div class="tiny" style="margin-top:6px">네 모서리 안에 <b>온전히</b> 들어간 블록 수를 셉니다. 이 값이 곧 축척이 됩니다.</div>
+    </div>
+    <div id="aStat" class="small" style="margin-top:9px"></div>
+    <div style="height:9px"></div>
+    <button class="btn" id="aRun" disabled>🔍 자동 판독</button>
+  </div>
+
+  <div class="card hide" id="aStep3">
+    <div class="steps"><div class="on"></div><div class="on"></div><div class="on"></div></div>
+    <div id="aResBox"></div>
+  </div>
+  <input id="aFile" type="file" accept="image/*" capture="environment" style="display:none" />
+</section>
+
 <section id="v-rec" class="hide">
   <div class="card">
     <h3>🗂 검측 기록</h3>
@@ -677,6 +796,366 @@ details ul{padding-left:18px;margin:7px 0}
 </div>
 
 <script>
+/* ============================================================================
+   BlockScan — 블록포장 사진 자동판독 (의존성 없음, 오프라인)
+   ----------------------------------------------------------------------------
+   핵심 발상
+     같은 규격 블록이 깔려 있으면, 구획 네 모서리와 그 안의 블록 장수만 알면
+     구획의 실치수가 확정된다. 실치수를 알면 사영변환(호모그래피)이 풀리고,
+     비스듬히 찍은 사진을 위에서 내려다본 도면(mm 좌표계)으로 펼 수 있다.
+     펴고 나면 줄눈이 어디쯤 있어야 하는지도 안다 → 그 근처만 훑으면 된다.
+     맹목적 선검출(Hough)보다 훨씬 안정적이다. 격자가 곧 사전정보다.
+   ========================================================================== */
+(function (root) {
+  "use strict";
+
+  /* ---- 선형대수 ------------------------------------------------------ */
+  function solve(A, b) {                      // 가우스 소거 (부분 피벗)
+    var n = b.length, i, j, k, M = [];
+    for (i = 0; i < n; i++) M.push(A[i].slice().concat([b[i]]));
+    for (k = 0; k < n; k++) {
+      var p = k;
+      for (i = k + 1; i < n; i++) if (Math.abs(M[i][k]) > Math.abs(M[p][k])) p = i;
+      if (Math.abs(M[p][k]) < 1e-12) return null;
+      var t = M[k]; M[k] = M[p]; M[p] = t;
+      for (i = k + 1; i < n; i++) {
+        var f = M[i][k] / M[k][k];
+        for (j = k; j <= n; j++) M[i][j] -= f * M[k][j];
+      }
+    }
+    var x = new Array(n);
+    for (i = n - 1; i >= 0; i--) {
+      var s = M[i][n];
+      for (j = i + 1; j < n; j++) s -= M[i][j] * x[j];
+      x[i] = s / M[i][i];
+    }
+    return x;
+  }
+
+  /** src(4점) → dst(4점) 사영변환. 반환 [a..h], 매핑 = ((ax+by+c)/(gx+hy+1), ...) */
+  function homography(src, dst) {
+    var A = [], b = [];
+    for (var i = 0; i < 4; i++) {
+      var sx = src[i][0], sy = src[i][1], dx = dst[i][0], dy = dst[i][1];
+      A.push([sx, sy, 1, 0, 0, 0, -sx * dx, -sy * dx]); b.push(dx);
+      A.push([0, 0, 0, sx, sy, 1, -sx * dy, -sy * dy]); b.push(dy);
+    }
+    return solve(A, b);
+  }
+  function applyH(h, x, y) {
+    var d = h[6] * x + h[7] * y + 1;
+    return [(h[0] * x + h[1] * y + h[2]) / d, (h[3] * x + h[4] * y + h[5]) / d];
+  }
+
+  /* ---- 원근 보정 ------------------------------------------------------ */
+  /**
+   * 사진의 구획 4점을 mm 좌표계 직사각형으로 편다.
+   * quad 는 [좌상, 우상, 우하, 좌하] 순서(사진 픽셀).
+   * 반환 {g:Float32Array(회색), W,H(px), pxmm, wmm,hmm}
+   */
+  function rectify(srcCanvas, quad, wmm, hmm, opt) {
+    opt = opt || {};
+    var sw = srcCanvas.width, sh = srcCanvas.height;
+    var sctx = srcCanvas.getContext("2d", { willReadFrequently: true });
+    var sd = sctx.getImageData(0, 0, sw, sh).data;
+
+    // 사진에서 구획 윗변·아랫변의 평균 픽셀 길이로 원본 해상도를 추정한다
+    function len(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
+    var pxTop = (len(quad[0], quad[1]) + len(quad[3], quad[2])) / 2;
+    var mmPerPx = wmm / Math.max(pxTop, 1);
+    // 원본보다 1.5배쯤 촘촘히 펴면 부분픽셀 계산이 안정된다. 과하면 메모리만 먹는다
+    var pxmm = opt.pxmm || Math.min(8, Math.max(1.5, 1.5 / mmPerPx));
+    var padB = opt.padBottomMm || 0;          // 자 밑을 보려면 아래로 더 편다
+    var W = Math.round(wmm * pxmm), H0 = Math.round(hmm * pxmm);
+    var H = H0 + Math.round(padB * pxmm);
+    var cap = opt.maxPx || 12e6;
+    if (W * H > cap) {
+      var f = Math.sqrt(cap / (W * H)); pxmm *= f;
+      W = Math.round(wmm * pxmm); H0 = Math.round(hmm * pxmm); H = H0 + Math.round(padB * pxmm);
+    }
+
+    // 펴진 좌표(px) → 사진 좌표(px) 역방향 매핑
+    // 네 점은 '자 면'(또는 구획)에만 대응한다. 여백 구간은 같은 평면으로 연장된다
+    var h = homography([[0, 0], [W, 0], [W, H0], [0, H0]], quad);
+    if (!h) return null;
+    var g = new Float32Array(W * H);
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var d = h[6] * x + h[7] * y + 1;
+        var u = (h[0] * x + h[1] * y + h[2]) / d, v = (h[3] * x + h[4] * y + h[5]) / d;
+        var val = 0;
+        if (u >= 0 && v >= 0 && u < sw - 1 && v < sh - 1) {
+          var u0 = u | 0, v0 = v | 0, fu = u - u0, fv = v - v0;
+          var i00 = (v0 * sw + u0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4;
+          function L(i) { return 0.299 * sd[i] + 0.587 * sd[i + 1] + 0.114 * sd[i + 2]; }
+          val = L(i00) * (1 - fu) * (1 - fv) + L(i10) * fu * (1 - fv) +
+                L(i01) * (1 - fu) * fv + L(i11) * fu * fv;
+        }
+        g[y * W + x] = val;
+      }
+    }
+    return { g: g, W: W, H: H, H0: H0, pxmm: pxmm, wmm: wmm, hmm: hmm, mmPerPxSrc: mmPerPx };
+  }
+
+  /* ---- 1차원 단면 판독 ------------------------------------------------ */
+  /**
+   * 줄눈 하나를 가로지르는 밝기 단면에서 중심과 폭을 읽는다.
+   * prof: 어두운 골이 하나 있는 배열. 반환 {c, w, contrast} (배열 인덱스 단위)
+   */
+  function readValley(prof) {
+    var n = prof.length, i, mn = Infinity, mi = 0, mx = -Infinity;
+    for (i = 0; i < n; i++) { if (prof[i] < mn) { mn = prof[i]; mi = i; } if (prof[i] > mx) mx = prof[i]; }
+    if (mi <= 0 || mi >= n - 1) return null;
+    // 부분픽셀 중심 — 최저점 주변 포물선 꼭짓점
+    var a = prof[mi - 1], b = prof[mi], c = prof[mi + 1], den = (a - 2 * b + c);
+    var sub = Math.abs(den) > 1e-6 ? 0.5 * (a - c) / den : 0;
+    if (!(sub > -1 && sub < 1)) sub = 0;
+    // 반높이 폭 — 골 바닥과 어깨의 중간 높이에서 좌우 교차점
+    var lvl = (mn + mx) / 2, L = mi, R = mi;
+    while (L > 0 && prof[L] < lvl) L--;
+    while (R < n - 1 && prof[R] < lvl) R++;
+    function cross(i0, i1) {
+      var v0 = prof[i0], v1 = prof[i1];
+      return Math.abs(v1 - v0) < 1e-6 ? i0 : i0 + (lvl - v0) / (v1 - v0) * (i1 - i0);
+    }
+    var xl = L < mi ? cross(L, L + 1) : mi, xr = R > mi ? cross(R, R - 1) : mi;
+
+    /* 줄눈 실폭은 반높이 폭으로 재면 안 된다.
+       실제 보도블록에는 모따기(모서리 경사면)가 있어 밝기 단면이 3단이 된다:
+         블록 상면(밝음) → 모따기(중간) → 줄눈(어두움)
+       반높이 선은 모따기 한가운데를 지나므로 줄눈도 모따기도 아닌 값이 나온다.
+       실측: 참값 2.0mm 가 4.43mm 로, 3.5mm 가 5.61mm 로 읽혔다.
+       대신 밝기 기울기가 가장 급한 곳을 쓴다. 모따기→줄눈 단차(약 78계조)가
+       상면→모따기 단차(약 38계조)보다 가팔라서, 그 두 점이 곧 줄눈 가장자리다. */
+    var d = new Float32Array(n);
+    for (i = 1; i < n - 1; i++) d[i] = prof[i + 1] - prof[i - 1];
+    function extremum(lo, hi, sign) {          // sign<0 하강(왼쪽 edge), >0 상승
+      var bi = -1, bv = 0;
+      for (var q = Math.max(1, lo); q <= Math.min(n - 2, hi); q++) {
+        var v = d[q] * sign;
+        if (v > bv) { bv = v; bi = q; }
+      }
+      if (bi < 1 || bi > n - 3) return null;
+      var a2 = d[bi - 1] * sign, b2 = d[bi] * sign, c2 = d[bi + 1] * sign, de = (a2 - 2 * b2 + c2);
+      var sb = Math.abs(de) > 1e-6 ? 0.5 * (a2 - c2) / de : 0;
+      if (!(sb > -1 && sb < 1)) sb = 0;
+      return bi + sb;
+    }
+    var el = extremum(0, mi, -1), er = extremum(mi, n - 1, +1);
+    var wg = (el != null && er != null && er > el) ? er - el : null;
+    /* 중심 산출 3가지. ⚠기본은 gradient 다.
+       줄눈은 폭이 있어 골 바닥이 평평하다. 평평한 바닥에 포물선 꼭짓점을 맞추면
+       2차항이 0에 가까워 계산이 무너지고, argmin 이 동률 중 첫 화소를 잡아
+       중심이 진행 방향 앞쪽으로 치우친다. 실측: 참값 3.90mm 가 3.38mm 로 눌렸다.
+       양쪽 가장자리(기울기 최대점)의 중점을 쓰면 폭에 무관하게 기하 중심이 나온다. */
+    /* 어둠의 무게중심. 어깨높이 아래로 파인 양을 무게로 준다.
+       바닥이 평평해도, 좌우 가장자리 대비가 달라도 중심이 흔들리지 않는다. */
+    var sw = 0, sm = 0;
+    for (i = 0; i < n; i++) { var wgt = lvl - prof[i]; if (wgt > 0) { sw += wgt; sm += wgt * i; } }
+    return {
+      cc: sw > 0 ? sm / sw : null,
+      cg: (el != null && er != null) ? (el + er) / 2 : null,
+      ch: (xr > xl) ? (xl + xr) / 2 : null,
+      cp: mi + sub,
+      w: Math.max(0, xr - xl), wg: wg, contrast: mx - mn
+    };
+  }
+
+  /* ---- 줄눈 스캔 ------------------------------------------------------ */
+  /**
+   * rect  : rectify() 결과
+   * o.pitch      줄눈 간격(mm) — 블록치수+줄눈
+   * o.first      첫 줄눈 중심의 예상 위치(mm)
+   * o.count      줄눈 개수
+   * o.axis       "h"=가로줄눈(y방향 탐색) / "v"=세로줄눈
+   * o.step       스테이션 간격(mm)
+   * o.minContrast 최소 대비(0~255). 낮으면 그 지점 버림
+   * 반환: [{idx, pos, pts:[{s, d, w, ok}]}]  s=진행거리mm, d=검출위치mm, w=띠폭mm
+   */
+  function scanJoints(rect, o) {
+    var g = rect.g, W = rect.W, H = rect.H, k = rect.pxmm;
+    var horiz = o.axis !== "v";
+    var spanMm = horiz ? rect.wmm : rect.hmm;      // 줄눈이 뻗는 방향
+    var step = o.step || Math.min(25, Math.max(5, spanMm / 60));
+    var win = Math.min(o.pitch * 0.25, 30);        // 탐색 반경 mm
+    // 스테이션 폭 — 잡음은 줄지만, 줄눈이 기울어 있으면 골이 뭉개져 변위를 눌러버린다
+    var hx = Math.max(0, Math.round((o.avgMm == null ? step * 0.3 : o.avgMm) * k));
+    var minC = o.minContrast == null ? 10 : o.minContrast;
+    var out = [];
+    for (var j = 0; j < o.count; j++) {
+      var pos0 = o.first + j * o.pitch;
+      var pts = [];
+      for (var s = step / 2; s < spanMm; s += step) {
+        var t0 = Math.round((pos0 - win) * k), t1 = Math.round((pos0 + win) * k);
+        if (t0 < 0 || t1 >= (horiz ? H : W)) continue;
+        var n = t1 - t0 + 1, prof = new Float32Array(n), sp = Math.round(s * k);
+        var cnt = 0;
+        for (var dx = -hx; dx <= hx; dx++) {
+          var q = sp + dx;
+          if (horiz) { if (q < 0 || q >= W) continue; for (var t = 0; t < n; t++) prof[t] += g[(t0 + t) * W + q]; }
+          else { if (q < 0 || q >= H) continue; for (var t2 = 0; t2 < n; t2++) prof[t2] += g[q * W + (t0 + t2)]; }
+          cnt++;
+        }
+        if (!cnt) continue;
+        for (var t3 = 0; t3 < n; t3++) prof[t3] /= cnt;
+        var v = readValley(prof);
+        if (!v) continue;
+        var cm = o.center || "grad";
+        var cc = cm === "peak" ? v.cp : cm === "half" ? v.ch : cm === "grad" ? v.cg : v.cc;
+        if (cc == null) cc = v.cc != null ? v.cc : (v.ch != null ? v.ch : v.cp);
+        pts.push({ s: s, d: (t0 + cc) / k, w: v.w / k, wg: v.wg == null ? null : v.wg / k,
+                   ok: v.contrast >= minC, contrast: v.contrast });
+      }
+      out.push({ idx: j, pos: pos0, pts: pts });
+    }
+    return out;
+  }
+
+  /* ---- 판정 ----------------------------------------------------------- */
+  function fitLine(pts) {                    // 총최소자승(주성분) 직선
+    var n = pts.length, mx = 0, my = 0, i;
+    for (i = 0; i < n; i++) { mx += pts[i].s; my += pts[i].d; }
+    mx /= n; my /= n;
+    var sxx = 0, sxy = 0, syy = 0;
+    for (i = 0; i < n; i++) { var a = pts[i].s - mx, b = pts[i].d - my; sxx += a * a; sxy += a * b; syy += b * b; }
+    var th = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    return { mx: mx, my: my, dx: Math.cos(th), dy: Math.sin(th) };
+  }
+  function devs(pts) {                        // 기준선에 대한 부호 있는 수직거리(mm)
+    var L = fitLine(pts);
+    return pts.map(function (p) { return (p.d - L.my) * L.dx - (p.s - L.mx) * L.dy; });
+  }
+
+  /**
+   * 판정구간을 블록 N장 단위로 끊어 통직도를 낸다.
+   * 구간 길이를 고정해야 현장끼리·날짜끼리 값을 비교할 수 있다.
+   */
+  function straightness(joint, o) {
+    var pts = joint.pts.filter(function (p) { return p.ok; });
+    // 구간 길이 = 블록 N장 실치수. N*W + (N-1)*줄눈 이지 N*(W+줄눈) 이 아니다.
+    var segLen = o.segLenMm, res = [];
+    var span = o.spanMm, nseg = Math.max(1, Math.floor(span / segLen + 1e-6));
+    for (var i = 0; i < nseg; i++) {
+      var a = i * segLen, b = a + segLen;
+      var sub = pts.filter(function (p) { return p.s >= a && p.s < b; });
+      if (sub.length < 5) { res.push({ from: a, to: b, n: sub.length, skip: true }); continue; }
+      var d = devs(sub), abs = d.map(Math.abs);
+      var dmax = Math.max.apply(null, abs);
+      var rms = Math.sqrt(abs.reduce(function (x, y) { return x + y * y; }, 0) / abs.length);
+      var over = abs.filter(function (v) { return v > o.tol; }).length;
+      res.push({
+        from: a, to: b, n: sub.length, dmax: dmax, rms: rms,
+        over: over, overP: over / abs.length * 100,
+        min: Math.min.apply(null, d), max: Math.max.apply(null, d),
+        grade: grade(dmax, rms, over, over / abs.length * 100, o.tol), devs: d
+      });
+    }
+    return res;
+  }
+  function grade(dmax, rms, over, overP, tol) {
+    if (dmax <= tol && rms <= tol / 2 && over === 0) return "합격";
+    if (dmax <= tol * 1.7 && overP <= 10 && rms <= tol * 0.85) return "조건부";
+    return "불량";
+  }
+
+  /**
+   * 줄눈 폭. 사진에서 읽히는 어두운 띠는 줄눈 + 양쪽 모따기다.
+   * 모따기 폭을 입력받아 빼야 실제 줄눈 폭이 된다.
+   */
+  function widths(joint) {
+    var ok = joint.pts.filter(function (p) { return p.ok && p.wg != null; });
+    if (!ok.length) return null;
+    var w = ok.map(function (p) { return p.wg; });
+    var band = ok.map(function (p) { return p.w; });
+    function stat(a) {
+      var m = a.reduce(function (x, y) { return x + y; }, 0) / a.length;
+      return { n: a.length, avg: m, max: Math.max.apply(null, a), min: Math.min.apply(null, a),
+               sd: Math.sqrt(a.reduce(function (x, y) { return x + (y - m) * (y - m); }, 0) / a.length) };
+    }
+    var r = stat(w); r.band = stat(band); return r;
+  }
+
+  /* ---- 측면 판독: 자 밑 틈 ------------------------------------------
+     높이(요철·단차)는 정면 사진으로 못 잰다. 사진에 깊이가 없기 때문이다.
+     대신 직선자를 대고 옆에서 찍으면, 자 자체가 길이 기준이 되어
+     자 밑면과 포장면 사이 틈을 mm 로 읽을 수 있다. 사람이 틈새게이지로
+     하던 것과 같은 원리다. 요철(3m 자, 10mm)과 단차(짧은 자, 2mm)는
+     자 길이와 허용값만 다르고 계산은 같다.
+     o.rulerT  자 두께(mm) = 편 영상에서 자 밑면의 y
+     o.maxGap  아래로 훑을 깊이(mm)
+     o.step    스테이션 간격(mm) */
+  function scanGap(rect, o) {
+    var g = rect.g, W = rect.W, H = rect.H, k = rect.pxmm;
+    var y0 = o.rulerT, maxG = o.maxGap || 25, step = o.step || Math.max(2, rect.wmm / 150);
+    var hx = Math.max(0, Math.round((o.avgMm == null ? step * 0.3 : o.avgMm) * k));
+    var minC = o.minContrast == null ? 8 : o.minContrast;
+    var pts = [];
+    for (var s2 = step / 2; s2 < rect.wmm; s2 += step) {
+      var t0 = Math.round((y0 - 1.8) * k), t1 = Math.round((y0 + maxG) * k);
+      if (t0 < 0 || t1 >= H) continue;
+      var n = t1 - t0 + 1, prof = new Float32Array(n), sp = Math.round(s2 * k), cnt = 0;
+      for (var dx = -hx; dx <= hx; dx++) {
+        var q = sp + dx; if (q < 0 || q >= W) continue;
+        for (var t = 0; t < n; t++) prof[t] += g[(t0 + t) * W + q];
+        cnt++;
+      }
+      if (!cnt) continue;
+      for (var t2 = 0; t2 < n; t2++) prof[t2] /= cnt;
+      /* ⚠"어두운 띠 다음의 상승 모서리"로 찾으면 안 된다.
+         자가 포장면에 닿아 틈이 0 인 구간에는 그늘 자체가 없어서 그런 모서리가
+         존재하지 않고, 검출기가 엉뚱한 선(줄눈 자국·블록 아래끝)을 잡는다.
+         실측: 참값 2.80mm 구간이 24.73mm 로 읽혔다.
+         대신 "어디까지 그늘인가"로 푼다. 아래쪽을 포장면 밝기로 보고,
+         그늘 바닥과의 중간값을 문턱으로 삼아 위에서부터 처음 넘어서는 곳을 찾는다.
+         틈이 0 이면 시작점이 이미 문턱 위라 0 이 나온다. */
+      var i0 = Math.max(1, Math.round(1.8 * k));          // 자 밑면 바로 아래
+      var lo = Math.max(i0 + 1, Math.round(n * 0.7)), acc = [];
+      for (var t3 = lo; t3 < n; t3++) acc.push(prof[t3]);
+      acc.sort(function (x, y) { return x - y; });
+      var pave = acc.length ? acc[acc.length >> 1] : prof[n - 1];   // 포장면 밝기(중앙값)
+      var dark = Infinity;
+      for (t3 = i0; t3 < Math.min(n, lo); t3++) if (prof[t3] < dark) dark = prof[t3];
+      var span = pave - dark;
+      var gapMm = 0;
+      if (span >= minC) {
+        var thr = dark + 0.5 * span, hit = -1;
+        for (t3 = i0; t3 < n; t3++) if (prof[t3] >= thr) { hit = t3; break; }
+        if (hit > i0) {
+          var v0 = prof[hit - 1], v1 = prof[hit];
+          var fr = Math.abs(v1 - v0) < 1e-6 ? 0 : (thr - v0) / (v1 - v0);
+          gapMm = ((hit - 1 + fr) - i0) / k + 1.8 - 1.8;   // i0 가 곧 y0 기준점
+        } else if (hit < 0) { continue; }                  // 끝까지 어둡다 → 판독 실패
+      }
+      var mn = Infinity, mx = -Infinity;
+      for (t3 = 0; t3 < n; t3++) { if (prof[t3] < mn) mn = prof[t3]; if (prof[t3] > mx) mx = prof[t3]; }
+      pts.push({ s: s2, gap: Math.max(0, gapMm), ok: (mx - mn) >= minC, contrast: mx - mn });
+
+    }
+    return pts;
+  }
+
+  /** 요철·단차 판정. o.fromMm~o.toMm 구간만 본다(FM 은 양단 750 제외). */
+  function gapJudge(pts, o) {
+    var use = pts.filter(function (p) { return p.ok && p.s >= o.fromMm && p.s <= o.toMm; });
+    if (use.length < 5) return null;
+    var gs = use.map(function (p) { return p.gap; });
+    var max = Math.max.apply(null, gs), at = use[gs.indexOf(max)].s;
+    var avg = gs.reduce(function (a, b) { return a + b; }, 0) / gs.length;
+    var grade = max <= o.tol * 0.8 ? "합격" : (max <= o.tol ? "조건부" : "불량");
+    return { n: use.length, max: max, at: at, avg: avg, tol: o.tol, grade: grade, pts: use };
+  }
+
+  root.BlockScan = {
+    scanGap: scanGap, gapJudge: gapJudge,
+    homography: homography, applyH: applyH, rectify: rectify,
+    scanJoints: scanJoints, straightness: straightness, widths: widths,
+    readValley: readValley, fitLine: fitLine, devs: devs, grade: grade
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+
+<script>
 "use strict";
 /* ══════════════════════════════════════════════
    저장소
@@ -782,7 +1261,7 @@ function Measure(cvId,wrapId,zoomId){
   this.ctx=this.cv.getContext("2d");
   this.img=null; this.k=1; this.ox=0; this.oy=0; this.k0=1;
   this.scale=null;          // mm per px(image)
-  this.pts={scale:[],ref:[],meas:[],ruler:[],low:[],pair:[]};
+  this.pts={scale:[],ref:[],meas:[],ruler:[],low:[],pair:[],quad:[]};
   this.autoRef=false;
   this.onchange=function(){};
   var pointers={},lastDist=0,lastMid=null,lastPt=null;
@@ -796,7 +1275,8 @@ function Measure(cvId,wrapId,zoomId){
     };
     fr.readAsDataURL(file);
   };
-  this.reset=function(){ this.scale=null; this.pts={scale:[],ref:[],meas:[],ruler:[],low:[],pair:[]}; };
+  this.reset=function(){ this.scale=null; this.auto=null;
+    this.pts={scale:[],ref:[],meas:[],ruler:[],low:[],pair:[],quad:[]}; };
   this.sizeCanvas=function(){
     var w=this.wrap.clientWidth||320;
     var h=Math.round(Math.min(w*1.18,Math.max(260,window.innerHeight*0.46)));
@@ -865,6 +1345,22 @@ function Measure(cvId,wrapId,zoomId){
     });
     for(var i=0;i+1<P.pair.length;i+=2){ line(P.pair[i],P.pair[i+1],"#B388FF",2.2); }
     P.pair.forEach(function(p){dot(p,"#B388FF",4.5);});
+    /* 구획(또는 자) 네 모서리 — 자동판독의 기준틀 */
+    if(P.quad.length){
+      for(var qi=0;qi<P.quad.length;qi++){
+        if(qi>0) line(P.quad[qi-1],P.quad[qi],"#4FC3F7",2.2);
+        if(P.quad.length===4&&qi===3) line(P.quad[3],P.quad[0],"#4FC3F7",2.2);
+      }
+      P.quad.forEach(function(p,i){dot(p,"#4FC3F7",6,["좌상","우상","우하","좌하"][i]);});
+    }
+    /* 자동으로 찍힌 측점 */
+    if(this.auto&&this.auto.length){
+      c.save(); c.fillStyle="#FF5252";
+      this.auto.forEach(function(p){
+        var A=self.toCv(p); c.beginPath(); c.arc(A.x,A.y,2.2,0,6.284); c.fill();
+      });
+      c.restore();
+    }
     if(this.zoomEl) this.zoomEl.textContent="×"+fx(this.k/this.k0,1);
   };
 
@@ -1053,8 +1549,8 @@ $("#jRestart").onclick=function(){ jReset(); };
 $("#jAutoRef").onclick=function(){ JM.autoRef=true; JM.pts.ref=[]; JM.draw(); jPhase(); };
 $("#jScaleOk").onclick=function(){
   var mm=parseFloat($("#jScaleMm").value);
-  if(!(mm>0)){alert("실제 거리를 mm로 입력하세요.");return;}
-  if(!JM.setScale(mm)) alert("두 점이 너무 가깝습니다. 다시 지정하세요.");
+  if(!(mm>0)){toast("실제 거리를 mm로 입력하세요");return;}
+  if(!JM.setScale(mm)) toast("두 점이 너무 가깝습니다");
   jPhase();
 };
 $("#jResult").onclick=function(){
@@ -1408,7 +1904,7 @@ $("#gUndo").onclick=function(){ GM.undo(["low","ruler","scale"]); if(GM.pts.scal
 $("#gFit").onclick=function(){ GM.fit(); };
 $("#gScaleOk").onclick=function(){
   var mm=parseFloat($("#gScaleMm").value);
-  if(!(mm>0)){alert("실제 거리를 mm로 입력하세요.");return;}
+  if(!(mm>0)){toast("실제 거리를 mm로 입력하세요");return;}
   if(!GM.setScale(mm)) alert("두 점이 너무 가깝습니다.");
   gPhase();
 };
@@ -1542,6 +2038,249 @@ $("#installX").onclick=function(){
     showInstallBar("📲 공유 → 「홈 화면에 추가」 하면 앱처럼 열립니다",false);
   },1500);
 })();
+/* ══════════════════════════════════════════════
+   ④ 사진 자동판독
+   ----------------------------------------------
+   같은 규격 블록이 깔려 있으면, 구획 네 모서리와 그 안의 블록 장수만 알면
+   구획의 실치수가 확정된다. 실치수를 알면 사영변환이 풀려 비스듬히 찍은
+   사진을 위에서 내려다본 도면(mm 좌표계)으로 펼 수 있고, 줄눈이 어디 있어야
+   하는지도 안다. 그 자리만 훑으므로 맹목적 선검출보다 훨씬 안정적이다.
+   높이(요철·단차)는 사진에 깊이가 없어 정면으로는 못 잰다 → 자를 대고
+   옆에서 찍어 자 밑 틈을 재는 측면 모드로 푼다.
+══════════════════════════════════════════════ */
+var AM=new Measure("aCv","aWrap","aZoom");
+var aMode="plan", aPat="run", aKind="flat", aRes=null;
+
+function aStd(){
+  var plan=aMode==="plan";
+  $("#aPlanIn").classList.toggle("hide",!plan);
+  $("#aSideIn").classList.toggle("hide",plan);
+  if(plan){
+    $("#aIntro").innerHTML="<b>평면 자동판독</b> — 구획 네 모서리만 찍으면 원근을 펴서 줄눈 <b>선형</b>과 <b>폭</b>을 스스로 훑습니다. 축척은 블록 규격에서 나옵니다.";
+    $("#aStdBox").innerHTML=
+      '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
+      '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
+      '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
+    $("#aShoot").innerHTML="촬영 요령 — ① <b>구획 네 모서리가 모두</b> 화면에 들어오게 ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다.";
+  }else{
+    var f=aKind==="flat";
+    $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
+    $("#aStdBox").innerHTML= f
+      ? '<div class="kv"><span>평탄성</span><b>3m 직선자 '+STD.flat.std+'mm 이내</b></div>'+
+        '<div class="kv"><span>판정구간</span><b>양단 750 제외 · 중앙 1,500</b></div>'+
+        '<div class="kv"><span>근거</span><b class="stdtag">'+STD.flat.src+'</b></div>'
+      : '<div class="kv"><span>고저차(단차)</span><b>'+STD.step.max+'mm 이내</b></div>'+
+        '<div class="kv"><span>대상</span><b>블록‑블록 · 블록‑경계블록</b></div>'+
+        '<div class="kv"><span>근거</span><b class="stdtag">'+STD.step.src+'</b></div>';
+    $("#aShoot").innerHTML="촬영 요령 — ① 자의 <b>옆면 전체</b>가 화면에 꽉 차게 ② 카메라를 <b>자 옆면에 정면</b>으로(위에서 내려보면 틈이 안 보임) ③ 자 밑 틈에 <b>그늘</b>이 지도록. 네 모서리는 <b>자 옆면</b>의 네 귀퉁이를 찍습니다.";
+  }
+  aReset();
+}
+$$(".amode").forEach(function(b){b.onclick=function(){
+  $$(".amode").forEach(function(x){x.classList.remove("on");x.classList.add("sec");});
+  b.classList.add("on"); aMode=b.dataset.m; aStd();
+};});
+$$(".apat").forEach(function(b){b.onclick=function(){
+  $$(".apat").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on"); aPat=b.dataset.p;
+};});
+$$(".akind").forEach(function(b){b.onclick=function(){
+  $$(".akind").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on"); aKind=b.dataset.k;
+  if(aKind==="flat"){ $("#aRl").value=3000; $("#aRt").value=50; $("#aGtol").value=STD.flat.std; $("#aSkip").value=750; }
+  else { $("#aRl").value=300; $("#aRt").value=30; $("#aGtol").value=STD.step.max; $("#aSkip").value=0; }
+  aStd();
+};});
+
+function aReset(){
+  AM.reset(); aRes=null;
+  $("#aStep2").classList.add("hide"); $("#aStep3").classList.add("hide");
+  $("#aStep1").classList.remove("hide"); $("#aRun").disabled=true;
+  $("#aCount").classList.add("hide"); $("#aStat").textContent="";
+}
+$("#aPhoto").onclick=function(){ $("#aFile").click(); };
+$("#aFile").onchange=function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f)return;
+  AM.load(f,function(){
+    $("#aStep1").classList.add("hide"); $("#aStep2").classList.remove("hide");
+    $("#aStep3").classList.add("hide"); AM.fit(); aPhase();
+  });
+  e.target.value="";
+};
+AM.onchange=function(){ aPhase(); };
+function aPhase(){
+  var n=AM.pts.quad.length, plan=aMode==="plan";
+  var txt = n<4 ? (plan?"구획":"자 옆면")+" 네 모서리를 좌상→우상→우하→좌하 순서로 ("+n+"/4)"
+                : (plan?"구획 안 블록 장수를 입력하세요":"판독 준비 완료");
+  $("#aBn").textContent = n<4 ? "1" : "2";
+  $("#aBnTxt").textContent = txt;
+  $("#aCount").classList.toggle("hide", !(plan && n===4));
+  var nc=+$("#aNc").value, nr=+$("#aNr").value;
+  $("#aRun").disabled = !(n===4 && (!plan || (nc>=1 && nr>=1)));
+  if(plan && n===4 && nc>=1 && nr>=1){
+    var W=+$("#aBw").value||200, H=+$("#aBh").value||100, J=+$("#aBj").value||2;
+    $("#aStat").textContent="구획 실치수 "+fx(nc*W+(nc-1)*J,0)+" × "+fx(nr*H+(nr-1)*J,0)+" mm";
+  } else $("#aStat").textContent="";
+}
+["#aNc","#aNr"].forEach(function(id){ $(id).oninput=aPhase; });
+$("#aAdd").onclick=function(){ if(AM.pts.quad.length<4) AM.add("quad"); else toast("네 점을 이미 찍었습니다"); };
+$("#aUndo").onclick=function(){ AM.undo(["quad"]); aPhase(); };
+$("#aFit").onclick=function(){ AM.fit(); };
+$("#aRestart").onclick=function(){ aReset(); };
+
+/* 사진을 캔버스로 — rectify 는 픽셀을 직접 읽는다 */
+function aSrcCanvas(){
+  var c=document.createElement("canvas");
+  c.width=AM.img.width; c.height=AM.img.height;
+  c.getContext("2d").drawImage(AM.img,0,0);
+  return c;
+}
+function aQuad(){ return AM.pts.quad.map(function(p){return [p.x,p.y];}); }
+/* 펴진 mm 좌표 → 원본 사진 좌표 (검출 지점을 화면에 되돌려 그리기 위함) */
+function aBack(rect){
+  var H0=rect.H0||rect.H;
+  var h=BlockScan.homography([[0,0],[rect.W,0],[rect.W,H0],[0,H0]],aQuad());
+  return function(xmm,ymm){
+    var p=BlockScan.applyH(h,xmm*rect.pxmm,ymm*rect.pxmm);
+    return {x:p[0],y:p[1]};
+  };
+}
+
+$("#aRun").onclick=function(){
+  try{ aMode==="plan" ? aReadPlan() : aReadSide(); }
+  catch(err){ toast("판독 실패: "+String(err.message||err).slice(0,40)); }
+};
+
+function aReadPlan(){
+  var W=+$("#aBw").value||200, H=+$("#aBh").value||100, J=+$("#aBj").value||2;
+  var nc=+$("#aNc").value, nr=+$("#aNr").value;
+  var tol=+$("#aTol").value||3, seg=+$("#aSeg").value||10, cham=+$("#aCham").value||0;
+  var wmm=nc*W+(nc-1)*J, hmm=nr*H+(nr-1)*J;
+  var rect=BlockScan.rectify(aSrcCanvas(),aQuad(),wmm,hmm,{maxPx:8e6});
+  if(!rect){ toast("네 점이 한 줄에 몰려 있습니다"); return; }
+  // 줄눈이 4화소보다 얇게 찍히면 폭은 못 믿는다 — 실측 2.0mm 가 3.5mm 로 읽혔다
+  var wOK = rect.mmPerPxSrc <= J/4;
+  var back=aBack(rect), rows=[], marks=[];
+  function run(axis){
+    var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
+    var acr   = axis==="h" ? H : W;      // 줄눈이 늘어서는 방향
+    var cnt   = axis==="h" ? nr-1 : nc-1;
+    var span  = axis==="h" ? wmm : hmm;
+    if(cnt<1) return;
+    var js=BlockScan.scanJoints(rect,{pitch:acr+J, first:(acr+J)-J/2, count:cnt,
+      axis:axis, step:Math.max(6,along/10)});
+    var segLen=Math.min(span, seg*along+(seg-1)*J);
+    js.forEach(function(jt,i){
+      jt.pts.forEach(function(q){
+        if(!q.ok) return;
+        var m = axis==="h" ? back(q.s,q.d) : back(q.d,q.s);
+        marks.push(m);
+      });
+      var segs=BlockScan.straightness(jt,{segLenMm:segLen, spanMm:span, tol:tol});
+      var wd=BlockScan.widths(jt);
+      segs.forEach(function(r,k){
+        if(r.skip) return;
+        rows.push({dir:axis==="h"?"가로":"세로", no:i+1, seg:k+1, nseg:segs.length,
+          from:r.from, to:r.to, n:r.n, dmax:r.dmax, rms:r.rms, over:r.over, overP:r.overP,
+          min:r.min, max:r.max, grade:r.grade,
+          w: (wOK&&wd)? wd.avg-2*cham : null, wmax: (wOK&&wd)? wd.max-2*cham : null,
+          wsd: (wOK&&wd)? wd.sd : null, off:false});
+      });
+    });
+  }
+  run("h");
+  if(aPat==="stack") run("v");
+  if(!rows.length){ toast("줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요"); return; }
+  AM.auto=marks; AM.draw();
+  aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK,
+    rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
+  aRender();
+}
+
+function aReadSide(){
+  var L=+$("#aRl").value||3000, T=+$("#aRt").value||50;
+  var tol=+$("#aGtol").value||10, skip=+$("#aSkip").value||0;
+  var depth=Math.max(20,tol*3);
+  // ⚠여백은 탐색 깊이보다 커야 한다. 같게 두면 t1>=H 라 전 지점이 버려진다
+  var rect=BlockScan.rectify(aSrcCanvas(),aQuad(),L,T,{padBottomMm:depth+8,maxPx:8e6});
+  if(!rect){ toast("네 점이 한 줄에 몰려 있습니다"); return; }
+  var gp=BlockScan.scanGap(rect,{rulerT:T,maxGap:depth});
+  var r=BlockScan.gapJudge(gp,{fromMm:skip,toMm:L-skip,tol:tol});
+  if(!r){ toast("판독 실패 — 자 밑 틈이 보이는 각도로 다시 찍으세요"); return; }
+  var back=aBack(rect);
+  AM.auto=gp.filter(function(q){return q.ok;}).map(function(q){ return back(q.s,T+q.gap); });
+  AM.draw();
+  aRes={kind:"side", r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"요철(평탄성)":"단차(고저차)",
+        mm:rect.mmPerPxSrc};
+  aRender();
+}
+
+function aRender(){
+  var html="";
+  if(aRes.kind==="plan"){
+    var live=aRes.rows.filter(function(r){return !r.off;});
+    var dmax=0, grade="합격", wall=[];
+    live.forEach(function(r){
+      if(r.dmax>dmax) dmax=r.dmax;
+      if(r.grade==="불량") grade="불량";
+      else if(r.grade==="조건부"&&grade!=="불량") grade="조건부";
+      if(r.w!=null) wall.push(r.w);
+    });
+    var wavg=wall.length? wall.reduce(function(a,b){return a+b;},0)/wall.length : null;
+    var wmx=wall.length? Math.max.apply(null,wall.map(function(v){return v;})) : null;
+    html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 편차 '+fx(dmax,1)+'mm / 허용 ±'+aRes.tol+'mm</div></div>';
+    html+='<div class="kv"><span>판정 구간</span><b>블록 '+aRes.seg+'장 단위</b></div>';
+    html+='<div class="kv"><span>검사한 줄눈</span><b>'+live.length+'구간 (전체 '+aRes.rows.length+')</b></div>';
+    if(wavg!=null) html+='<div class="kv"><span>줄눈 폭</span><b>평균 '+fx(wavg,2)+'mm · 최대 '+fx(wmx,2)+'mm</b></div>';
+    html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.rect.mm,3)+' mm/화소</b></div>';
+    if(!aRes.wOK) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 줄눈이 '+fx(aRes.J/aRes.rect.mm,1)+'화소로만 찍혀 <b>폭은 판독하지 않았습니다</b>(4화소 이상 필요). 선형은 유효하나 편차가 다소 작게 나올 수 있습니다 — 폭까지 보려면 더 가까이 찍으십시오.</div>';
+    html+='<div style="height:10px"></div><div class="small"><b>줄눈별 결과</b> — 줄을 누르면 판정에서 빼거나 되돌립니다</div>';
+    html+='<table class="atab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px">';
+    html+='<tr style="color:#8aa"><td>줄눈</td><td>구간</td><td>측점</td><td>Dmax</td><td>RMS</td><td>폭</td><td>판정</td></tr>';
+    aRes.rows.forEach(function(r,i){
+      html+='<tr data-i="'+i+'" style="cursor:pointer;'+(r.off?'opacity:.35;text-decoration:line-through':'')+'">'+
+        '<td>'+r.dir+' '+r.no+'</td><td>'+r.seg+'/'+r.nseg+'</td><td>'+r.n+'</td>'+
+        '<td><b>'+fx(r.dmax,1)+'</b></td><td>'+fx(r.rms,2)+'</td>'+
+        '<td>'+(r.w!=null?fx(r.w,2):"—")+'</td>'+
+        '<td class="'+vdCls(r.grade)+'">'+r.grade+'</td></tr>';
+    });
+    html+='</table>';
+    aRes.rec={tool:"자동판독·줄눈", pos:$("#aPos").value||DB.site.loc, grade:grade,
+      main:fx(dmax,1)+"mm", std:"±"+aRes.tol+"mm",
+      detail:"구간 "+live.length+"개 / 폭 평균 "+(wavg!=null?fx(wavg,2)+"mm":"—")+" / 해상도 "+fx(aRes.rect.mm,3)+"mm·화소⁻¹",
+      photo:AM.snapshot(880)};
+  }else{
+    var r=aRes.r;
+    html+='<div class="vd '+vdCls(r.grade)+'"><div class="v1">'+r.grade+'</div><div class="v2">최대 틈 '+fx(r.max,1)+'mm / 허용 '+aRes.tol+'mm</div></div>';
+    html+='<div class="kv"><span>측정 종류</span><b>'+aRes.kindName+'</b></div>';
+    html+='<div class="kv"><span>판정 구간</span><b>'+fx(aRes.skip,0)+' ~ '+fx(aRes.L-aRes.skip,0)+'mm</b></div>';
+    html+='<div class="kv"><span>최대 틈 위치</span><b>자 시작점에서 '+fx(r.at,0)+'mm</b></div>';
+    html+='<div class="kv"><span>평균 틈</span><b>'+fx(r.avg,2)+'mm</b></div>';
+    html+='<div class="kv"><span>측점 수</span><b>'+r.n+'개</b></div>';
+    html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.mm,3)+' mm/화소</b></div>';
+    if(aRes.tol/aRes.mm<8) html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 허용값이 '+fx(aRes.tol/aRes.mm,1)+'화소밖에 안 됩니다. 자를 화면에 더 크게 담아 다시 찍으십시오.</div>';
+    aRes.rec={tool:"자동판독·"+aRes.kindName, pos:$("#aPos").value||DB.site.loc, grade:r.grade,
+      main:fx(r.max,1)+"mm", std:aRes.tol+"mm 이내",
+      detail:"구간 "+fx(aRes.skip,0)+"~"+fx(aRes.L-aRes.skip,0)+"mm / 측점 "+r.n+"개 / 최대 위치 "+fx(r.at,0)+"mm",
+      photo:AM.snapshot(880)};
+  }
+  html+='<img class="thumb" src="'+aRes.rec.photo+'" alt="판독 결과" />';
+  html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="aSave">기록 저장</button><button class="btn sec" id="aAgain">다시 판독</button></div>';
+  html+='<div class="tiny" style="margin-top:8px">자동판독은 <b>1차 선별</b>입니다. 허용값 경계(±20% 이내)이거나 판정이 갈리는 구간은 현장 실측으로 확인하십시오. 값이 이상하면 규격·블록 장수를 고쳐 «다시 판독»하십시오.</div>';
+  $("#aResBox").innerHTML=html;
+  $("#aStep2").classList.add("hide"); $("#aStep3").classList.remove("hide");
+  $("#aSave").onclick=function(){ addRec(aRes.rec); toast("✔ 기록에 저장했습니다"); go("rec"); };
+  $("#aAgain").onclick=function(){ $("#aStep3").classList.add("hide"); $("#aStep2").classList.remove("hide"); AM.fit(); };
+  $$("#aResBox .atab tr[data-i]").forEach(function(tr){
+    tr.onclick=function(){ var i=+tr.dataset.i; aRes.rows[i].off=!aRes.rows[i].off; aRender(); };
+  });
+}
+aStd();
+
+
+
+
+
 </script>
 </body>
 </html>
