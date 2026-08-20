@@ -299,7 +299,10 @@ details ul{padding-left:18px;margin:7px 0}
       <div><label class="lab">측선 위치</label><input type="text" id="jPos" placeholder="예: A열 3m 측선" /></div>
     </div>
     <div style="height:10px"></div>
-    <button class="btn" id="jPhoto">📷 사진 촬영 / 선택</button>
+    <div class="btnrow">
+        <button class="btn" id="jPhoto">📷 촬영</button>
+        <button class="btn sec" id="jPick">🖼 앨범에서 선택</button>
+      </div>
     <div class="tiny" style="margin-top:8px">
       촬영 요령 — ① 줄눈선이 화면 <b>대각선으로 길게</b> 들어오도록 ② 카메라를 <b>노면에 최대한 수직</b>으로(비스듬하면 원근 왜곡으로 값이 커짐)
       ③ 축척 기준물(줄자·블록 1장)이 <b>같은 평면</b>에 보이도록.
@@ -351,7 +354,7 @@ details ul{padding-left:18px;margin:7px 0}
     <div class="steps"><div class="on"></div><div class="on"></div><div class="on"></div></div>
     <div id="jResBox"></div>
   </div>
-  <input id="jFile" type="file" accept="image/*" capture="environment" style="display:none" />
+  <input id="jFile" type="file" accept="image/*" style="display:none" />
 </section>
 
 <!-- ══════════ ② SLOPE ══════════ -->
@@ -526,7 +529,10 @@ details ul{padding-left:18px;margin:7px 0}
         직선자를 대고 <b>측면에서</b> 찍은 사진으로 간극을 환산합니다. 촬영각·원근 영향으로 <b>참고값</b>이며,
         판정은 틈새게이지 실측값을 우선합니다.
       </div>
-      <button class="btn" id="gPhoto">📷 사진 촬영 / 선택</button>
+      <div class="btnrow">
+        <button class="btn" id="gPhoto">📷 촬영</button>
+        <button class="btn sec" id="gPick">🖼 앨범에서 선택</button>
+      </div>
     </div>
     <div class="card hide" id="gStep2">
       <div class="banner"><span class="dot" id="gBn">1</span><span id="gBnTxt">축척: 직선자 위의 길이를 아는 두 점을 지정</span></div>
@@ -557,7 +563,7 @@ details ul{padding-left:18px;margin:7px 0}
       <div id="gStat" class="small" style="margin-top:9px"></div>
       <div id="gRes"></div>
     </div>
-    <input id="gFile" type="file" accept="image/*" capture="environment" style="display:none" />
+    <input id="gFile" type="file" accept="image/*" style="display:none" />
   </div>
 </section>
 
@@ -626,7 +632,10 @@ details ul{padding-left:18px;margin:7px 0}
     <label class="lab">측선/위치</label>
     <input type="text" id="aPos" placeholder="예: A열 3m 측선" />
     <div style="height:10px"></div>
-    <button class="btn" id="aPhoto">📷 사진 촬영 / 선택</button>
+    <div class="btnrow">
+        <button class="btn" id="aPhoto">📷 촬영</button>
+        <button class="btn sec" id="aPick">🖼 앨범에서 선택</button>
+      </div>
     <div class="tiny" id="aShoot" style="margin-top:8px"></div>
   </div>
 
@@ -672,7 +681,7 @@ details ul{padding-left:18px;margin:7px 0}
     <div class="steps"><div class="on"></div><div class="on"></div><div class="on"></div></div>
     <div id="aResBox"></div>
   </div>
-  <input id="aFile" type="file" accept="image/*" capture="environment" style="display:none" />
+  <input id="aFile" type="file" accept="image/*" style="display:none" />
 </section>
 
 <section id="v-rec" class="hide">
@@ -1502,7 +1511,18 @@ function jReset(){
   JM.reset(); $("#jStep2").classList.add("hide"); $("#jStep3").classList.add("hide");
   $("#jStep1").classList.remove("hide"); $("#jResult").disabled=true;
 }
-$("#jPhoto").onclick=function(){ $("#jFile").click(); };
+/* 촬영 / 앨범 선택
+   같은 file input 을 쓰되 capture 속성을 클릭 직전에 붙였다 뗀다.
+   capture 가 있으면 카메라가 바로 열리고, 없으면 앨범·파일 선택이 열린다.
+   (input 을 두 개 두면 change 핸들러도 두 벌이 돼 관리가 나빠진다) */
+function setCapture(el,cam){
+  if(!el) return null;
+  if(cam) el.setAttribute("capture","environment"); else el.removeAttribute("capture");
+  return el.getAttribute("capture");
+}
+function pickPhoto(sel,cam){ var el=$(sel); setCapture(el,cam); el.click(); }
+$("#jPhoto").onclick=function(){ pickPhoto("#jFile",true); };
+$("#jPick").onclick=function(){ pickPhoto("#jFile",false); };
 $("#jFile").onchange=function(e){
   var f=e.target.files&&e.target.files[0]; if(!f)return;
   JM.load(f,function(){
@@ -1862,7 +1882,8 @@ $("#stSave").onclick=function(){
 
 /* 사진 간극 */
 var GM=new Measure("gCv","gWrap","gZoom");
-$("#gPhoto").onclick=function(){ $("#gFile").click(); };
+$("#gPhoto").onclick=function(){ pickPhoto("#gFile",true); };
+$("#gPick").onclick=function(){ pickPhoto("#gFile",false); };
 $("#gFile").onchange=function(e){
   var f=e.target.files&&e.target.files[0]; if(!f)return;
   GM.load(f,function(){ $("#gStep2").classList.remove("hide"); GM.fit(); gPhase(); });
@@ -2098,7 +2119,8 @@ function aReset(){
   $("#aStep1").classList.remove("hide"); $("#aRun").disabled=true;
   $("#aCount").classList.add("hide"); $("#aStat").textContent="";
 }
-$("#aPhoto").onclick=function(){ $("#aFile").click(); };
+$("#aPhoto").onclick=function(){ pickPhoto("#aFile",true); };
+$("#aPick").onclick=function(){ pickPhoto("#aFile",false); };
 $("#aFile").onchange=function(e){
   var f=e.target.files&&e.target.files[0]; if(!f)return;
   AM.load(f,function(){
@@ -2276,6 +2298,8 @@ function aRender(){
   });
 }
 aStd();
+
+
 
 
 
