@@ -4469,7 +4469,18 @@ function spOpenPlan(P){
     else { $("#aNc").value=""; $("#aNr").value=""; $("#aCntNote").textContent="";
       $("#aHelp").innerHTML="⚠ <b>장수는 직접 세어 넣으십시오</b> — "+P.untrust+"."; }
     AM.draw();
-  } else { aSuggest(true); }
+    aPhase();
+    /* ★사진을 넣으면 «바로» 결과까지 간다. 고치고 싶을 때만 되돌아온다. */
+    if(P.trusted){ setTimeout(function(){ try{ aReadPlan(); }catch(e){} }, 30); return; }
+    /* 장수를 못 믿겠으면 —— 그래도 빈손으로 두지 않는다.
+       장수가 필요 없는 «탭 없음» 판독으로 줄눈만이라도 먼저 보여 준다. */
+    $("#aHelp").innerHTML="⚠ <b>장수를 못 세었습니다</b>("+P.untrust+"). "+
+      "아래에 <b>줄눈만</b> 먼저 보여 드립니다 — <b>침하까지</b> 보시려면 "+
+      "구획 네 점을 맞추고 <b>장수를 세어 넣은 뒤</b> «자동 판독»을 누르십시오.";
+    setTimeout(function(){ try{ uRun(); }catch(e){} }, 30);
+    return;
+  }
+  aSuggest(true);
   aPhase();
 }
 function spOpenSide(S){
@@ -4482,6 +4493,9 @@ function spOpenSide(S){
     $("#aHelp").innerHTML="자의 <b>위·아래 모서리</b>를 앱이 찾아 네 점을 놓았습니다. "+
       "어긋났으면 <b>끌어서</b> 고치십시오 — 끄는 동안 확대창이 따라옵니다.";
     AM.draw();
+    aPhase();
+    setTimeout(function(){ try{ aReadSide(); }catch(e){} }, 30);   /* 바로 판독 */
+    return;
   } else {
     AM.pts.quad=[];
     $("#aHelp").innerHTML="자를 못 찾았습니다 — <b>자 옆면의 네 귀퉁이</b>를 «점 찍기»로 찍어 주십시오.";
@@ -5459,11 +5473,23 @@ function aRender(){
     var resMm = aRes.mmCross || aRes.mm;
     var resPx = aRes.tol / Math.max(resMm, 1e-6);
     var tooCoarse = resPx < 8;
-    var grade = tooCoarse ? "조건부" : r.grade;
+    /* ⚠⚠자를 대면 반드시 어딘가는 뜬다. 전 구간이 거의 0 이면 그건 «자 사진»이
+       아니다 —— 위에서 내려다본 사진을 측면으로 잘못 보면 이렇게 된다.
+       현장 2차 시험에서 그 바람에 「합격 0.0mm」라는 가짜 판정이 나왔다. */
+    /* 최댓값만 보면 잡음 한 점에 속는다 — «평균»이 거의 0인 것이 진짜 신호다.
+       실제 평탄성은 좋은 포장이라도 평균 1~3mm 는 뜬다.
+       (현장 2차: 평균 0.15mm·최대 1.7mm 로 「합격」이 나왔다) */
+    var noGap = (r.n>=20 && r.avg<0.4 && r.max<2.5);
+    var grade = (tooCoarse||noGap) ? "조건부" : r.grade;
     html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+
       (tooCoarse
         ? '판정 유보 — 허용 '+aRes.tol+'mm 가 '+fx(resPx,1)+'화소뿐이라 가릴 수 없습니다'
         : '최대 틈 '+fx(r.max,1)+'mm / 허용 '+aRes.tol+'mm')+'</div></div>';
+    if(noGap)
+      html+='<div class="warnbox">⚠ <b>자 밑에 틈이 전혀 없습니다</b>(전 구간 '+fx(r.max,1)+'mm). '+
+        '자를 대면 어딘가는 반드시 뜹니다 — <b>이 사진이 «자를 옆에서 찍은 것»이 맞습니까?</b><br>'+
+        '<b>위에서 내려다본 사진이라면</b> 이 값은 아무 뜻이 없습니다. 「평면 · 줄눈」으로 다시 보십시오 — '+
+        '그래야 <b>줄눈과 침하</b>가 나옵니다.</div>';
     if(tooCoarse)
       html+='<div class="tiny" style="color:#F5A524;margin:6px 0">읽힌 값 '+fx(r.max,1)+
         'mm 는 <b>판정 근거가 못 됩니다</b>. 자를 화면에 <b>'+fx(8/Math.max(resPx,1e-6),1)+
@@ -5485,8 +5511,9 @@ function aRender(){
     
     aRes.rec={tool:"자동판독·"+aRes.kindName+(aRes.dir?"("+aRes.dir+")":""),
       pos:$("#aPos").value||DB.site.loc, grade:grade,
-      main:(tooCoarse?"판정 유보":fx(r.max,1)+"mm"), std:aRes.tol+"mm 이내",
-      detail:(tooCoarse?"해상도 부족(허용값 "+fx(resPx,1)+"화소) — 다시 촬영 필요 / ":"")+
+      main:((tooCoarse||noGap)?"판정 유보":fx(r.max,1)+"mm"), std:aRes.tol+"mm 이내",
+      detail:(noGap?"자 밑 틈이 전혀 없음 — 자 사진이 아닐 수 있음 / ":"")+
+             (tooCoarse?"해상도 부족(허용값 "+fx(resPx,1)+"화소) — 다시 촬영 필요 / ":"")+
              "구간 "+fx(aRes.skip,0)+"~"+fx(aRes.L-aRes.skip,0)+"mm / 측점 "+r.n+"개 / 최대 위치 "+fx(r.at,0)+"mm",
       photo:AM.snapshot(880)};
   }
@@ -5512,7 +5539,9 @@ function aRender(){
   html+='<img class="thumb" src="'+aRes.rec.photo+'" alt="판독 결과" />';
   html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="aSave">'+
         (SPOT.on? "📍 이 측점에 넣기":"기록 저장")+
-        '</button><button class="btn sec" id="aAgain">다시 판독</button></div>';
+        '</button><button class="btn sec" id="aAgain">🔧 구획·설정 고치기</button></div>'+
+        '<div class="tiny" style="margin-top:6px">값이 이상하면 «고치기»에서 <b>구획 네 점</b>을 끌어 맞추거나 '+
+        '<b>블록 실치수·장수</b>를 바꾼 뒤 다시 판독하십시오.</div>';
   html+='<div class="tiny" style="margin-top:8px">자동판독은 <b>1차 선별</b>입니다. 허용값 경계(±20% 이내)이거나 판정이 갈리는 구간은 현장 실측으로 확인하십시오. 값이 이상하면 규격·블록 장수를 고쳐 «다시 판독»하십시오.</div>';
   $("#aResBox").innerHTML=html;
   $("#aStep2").classList.add("hide"); $("#aStep3").classList.remove("hide");
