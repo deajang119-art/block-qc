@@ -39,6 +39,12 @@
       back: function (u, v) {                      // 사진 → 지면
         var q = root.BlockAutoCore.mulv3(Hi, [u, v, 1]);
         return [q[0] / q[2], q[1] / q[2]];
+      },
+      /* ★지면에서 e 만큼 뜬(꺼진) 점의 투영 — 종단 형상 시험에 쓴다 */
+      fwd3: function (X, Z, e) {
+        var h2 = hh - (e || 0);
+        var yc = h2 * ct - Z * st, zc = h2 * st + Z * ct;
+        return [cx + f * X / zc, cy + f * yc / zc];
       }
     };
   }
@@ -53,18 +59,28 @@
     var X0 = -(o.nx * px) / 2, Z0 = o.Z0;
     var q = [cam.fwd(X0 - px, Z0), cam.fwd(X0 + (o.nx + 1) * px, Z0),
              cam.fwd(X0 + (o.nx + 1) * px, Z0 + o.nz * pz), cam.fwd(X0 - px, Z0 + o.nz * pz)];
+    /* (배경 사각형은 굴곡 없이 그려도 된다 — 블록이 그 위를 덮는다) */
     x.fillStyle = "#3a3a3c";                                   // 줄눈(어두움)
     x.beginPath(); x.moveTo(q[0][0], q[0][1]);
     for (var k = 1; k < 4; k++) x.lineTo(q[k][0], q[k][1]);
     x.closePath(); x.fill();
     var seed = o.seed || 11;
     function rnd() { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; }
+    /* ★굴곡 — 지면이 꺼져 있으면 블록도 그만큼 내려앉아 찍힌다.
+       이게 있어야 「줄눈이 밀려 보인다」를 정답과 견줄 수 있다. */
+    var surf = o.surface
+      ? function (Z) {
+          var t = (Z - o.surface.at) / (o.surface.w || 250);
+          return -(o.surface.depth || 0) * Math.exp(-t * t);
+        }
+      : function () { return 0; };
+    function F(X, Z) { return cam.fwd3(X, Z, surf(Z)); }
     for (var j = 0; j < o.nz; j++) {
       var off = (o.bond === "run" && (j & 1)) ? px / 2 : 0;
       for (var i = -1; i <= o.nx; i++) {
         var X = X0 + i * px + off, Z = Z0 + j * pz;
-        var p1 = cam.fwd(X, Z), p2 = cam.fwd(X + bw, Z),
-            p3 = cam.fwd(X + bw, Z + bh), p4 = cam.fwd(X, Z + bh);
+        var p1 = F(X, Z), p2 = F(X + bw, Z),
+            p3 = F(X + bw, Z + bh), p4 = F(X, Z + bh);
         var v = 178 + Math.round(rnd() * 24);
         x.fillStyle = "rgb(" + v + "," + (v - 7) + "," + (v - 15) + ")";
         x.beginPath(); x.moveTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]);
@@ -533,6 +549,64 @@
                 && E.tacGap != null && Math.abs(E.tacGap - gapT) <= 45 };
   }
 
+  /* ★자 없이 얻은 종단 형상이 정답과 맞는가 */
+  async function profCheck(name, opt) {
+    opt = opt || {};
+    var probe = make({});
+    var pim = await load(probe.url);
+    root.AM.img = pim; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = probe.o.bw;
+    document.querySelector("#aBh").value = probe.o.bh;
+    document.querySelector("#aBj").value = probe.o.jt;
+    document.querySelector("#aTol").value = 3;
+    document.querySelector("#aSeg").value = 10;
+    document.querySelector("#aCham").value = 0;
+    root.uF35 = probe.o.f35; root.aMode = "plan"; root.aPat = "stack";
+    var Q0 = root.aFindQuad(pim);
+    if (!Q0.ok) return { name: name, ok: false, why: "구획 못 잡음: " + Q0.why };
+    var zs0 = Q0.quad.map(function (q) { return probe.cam.back(q.x, q.y)[1]; });
+    /* 파임을 구획 한가운데에 놓는다 */
+    var zc = (Math.min.apply(null, zs0) + Math.max.apply(null, zs0)) / 2;
+    var depth = opt.depth == null ? 12 : opt.depth;
+    var S = make({ surface: { depth: depth, at: zc, w: opt.w || 220 } });
+    var im = await load(S.url);
+    root.AM.img = im; root.AM.reset(); root.AM.fit();
+    root.uF35 = S.o.f35;
+    var P = root.aFindQuad(im);
+    if (!P.ok) return { name: name, ok: false, why: "구획 못 잡음(굴곡): " + P.why };
+    root.AM.pts.quad = P.quad.map(function (q) { return { x: q.x, y: q.y }; });
+    document.querySelector("#aNc").value = P.nc;
+    document.querySelector("#aNr").value = P.nr;
+    root.AM.pts.pair = [];
+    try { root.aReadPlan(); } catch (e) { return { name: name, ok: false, why: "판독 오류 " + e.message }; }
+    var R = root.aRes, pf = R && R.prof;
+    if (!pf || !pf.ok) return { name: name, ok: false, why: (pf && pf.why) || "형상 결과 없음" };
+    /* 참값 —— 앱이 잰 s 자리마다 실제 지면 높이를 넣고 같은 방식으로 오목을 잰다 */
+    var wq = P.quad.map(function (q) { return S.cam.back(q.x, q.y); });
+    var zFar = (wq[0][1] + wq[1][1]) / 2, zNear = (wq[2][1] + wq[3][1]) / 2;
+    var hmm = P.nr * S.o.bh + (P.nr - 1) * S.o.jt;
+    function surfT(Z) {
+      var t = (Z - zc) / (opt.w || 220);
+      return -depth * Math.exp(-t * t);
+    }
+    var truth = pf.pts.map(function (q) {
+      var Z = zFar + (zNear - zFar) * (q.s / hmm);
+      return { s: q.s, h: surfT(Z) };
+    });
+    var tg = root.aSag(truth), ag = pf.sagAll;
+    return { name: name, ok: true,
+             참깊이mm: depth, 잰오목mm: ag ? +ag.max.toFixed(1) : null,
+             참오목mm: tg ? +tg.max.toFixed(1) : null,
+             카메라높이m: +(pf.H / 1000).toFixed(2), 참높이m: +(S.o.h / 1000).toFixed(2),
+             담긴길이m: +(pf.span / 1000).toFixed(2), 측점: pf.n,
+             가름한계mm: pf.noise != null ? +pf.noise.toFixed(1) : null,
+             포화: !!pf.sat, 밀림최대mm: pf.rmax != null ? +pf.rmax.toFixed(1) : null,
+             /* 포화라고 «말했으면» 얕게 읽은 것을 잘못이라 하지 않는다 —
+                말 안 하고 얕게 읽는 것만 잘못이다 */
+             pass: !!(ag && tg && Math.abs(pf.H - S.o.h) / S.o.h < 0.15
+                      && (pf.sat || Math.abs(ag.max - tg.max) <= Math.max(2.5, tg.max * 0.3))) };
+  }
+
   async function runMM() {
     var out = [];
     for (var i = 0; i < CASES.length; i++) {
@@ -545,5 +619,6 @@
   root.BLKTEST = { run: run, runMM: runMM, one: one, mmCheck: mmCheck, drag: drag,
                    make: make, load: load, CASES: CASES,
                    sideMake: sideMake, sideCheck: sideCheck, runSide: runSide, SIDE: SIDE,
-                   classifyCheck: classifyCheck, tacCheck: tacCheck, edgeCheck: edgeCheck };
+                   classifyCheck: classifyCheck, tacCheck: tacCheck, edgeCheck: edgeCheck,
+                   profCheck: profCheck };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -4509,6 +4509,127 @@ function aTactile(rect){
 }
 
 /* ══════════════════════════════════════════════════════════════
+   자 없이 종단 형상 —— 「바닥이 꺼지면 줄눈이 밀려 보인다」
+   --------------------------------------------------------------
+   카메라가 높이 H 에 있고 지면의 한 자리가 h 만큼 꺼져 있으면, 그 자리는
+   기준 평면 위에서 «발밑점에서 멀어지는 쪽»으로 Δ = d·h/H 만큼 밀려 보인다
+   (d = 발밑점에서의 수평거리). H=1.5m, d=2m 이면 10mm 꺼짐 → 13mm 밀림.
+   앱은 줄눈 자리를 0.2mm 급으로 재고 있으니, «이상 격자 대비 잔차»가 곧
+   높이다. 사진 한 장으로 종단 형상이 나온다 — 자를 대지 않고.
+
+       h = r · H / ((P − N)·n̂)
+
+   H 와 발밑점 N 은 평면 호모그래피를 EXIF 초점으로 분해해서 얻는다.
+   ⚠그래서 EXIF 초점이 없으면 이 기능은 아예 못 한다(정직하게 거부).
+   ⚠블록 낱장 편차(±2mm)가 잔차에 백색잡음으로 섞인다 — 높이는 완만하고
+     낱장 편차는 칸마다 제멋대로라 성질이 다르지만, 잡음 바닥은 표기한다.
+══════════════════════════════════════════════════════════════ */
+function aPose(rect){
+  if(!AM.img||!uF35) return null;
+  var f=BlockAuto.focalPx(uF35, AM.img.width, AM.img.height);
+  if(!f) return null;
+  var C=BlockAutoCore;
+  var mmRect=[[0,0],[rect.wmm,0],[rect.wmm,rect.hmm],[0,rect.hmm]];
+  var hp=BlockScan.homography(mmRect, aQuad());        // mm → 사진(px)
+  var K=new Float64Array([f,0,AM.img.width/2, 0,f,AM.img.height/2, 0,0,1]);
+  var Ki=C.inv3(K); if(!Ki) return null;
+  var Hm=new Float64Array([hp[0],hp[1],hp[2], hp[3],hp[4],hp[5], hp[6],hp[7],1]);
+  var M=C.mul3(Ki,Hm);
+  var h1=[M[0],M[3],M[6]], h2=[M[1],M[4],M[7]], h3=[M[2],M[5],M[8]];
+  var n1=C.norm3(h1), n2=C.norm3(h2);
+  if(!(n1>1e-12&&n2>1e-12)) return null;
+  var lam=2/(n1+n2);
+  var sg = h3[2]*lam<0 ? -1 : 1;                       // 평면은 카메라 앞에 있다
+  var r1=[sg*h1[0]/n1, sg*h1[1]/n1, sg*h1[2]/n1];
+  var r2=[sg*h2[0]/n2, sg*h2[1]/n2, sg*h2[2]/n2];
+  var r3=C.cross3(r1,r2);
+  var t=[sg*h3[0]*lam, sg*h3[1]*lam, sg*h3[2]*lam];
+  var Hc=Math.abs(r3[0]*t[0]+r3[1]*t[1]+r3[2]*t[2]);
+  if(!(Hc>200&&Hc<6000)) return null;                  // 사람 키 언저리가 아니면 못 믿는다
+  return {f:f, H:Hc,
+          nadir:[-(r1[0]*t[0]+r1[1]*t[1]+r1[2]*t[2]),
+                 -(r2[0]*t[0]+r2[1]*t[1]+r2[2]*t[2])],
+          orth:Math.abs(r1[0]*r2[0]+r1[1]*r2[1]+r1[2]*r2[2])};
+}
+
+/* 3m 직선자를 «얹었을 때» 가장 오목한 깊이 —— 자는 높은 점 둘에 걸린다.
+   그래서 윗껍질(upper convex hull)을 만들고 거기서 아래로 얼마나 파였나 본다. */
+function aSag(P){
+  var n=P.length; if(n<3) return null;
+  var hull=[], i;
+  for(i=0;i<n;i++){
+    while(hull.length>=2){
+      var a=P[hull[hull.length-2]], b=P[hull[hull.length-1]], c=P[i];
+      var cr=(b.s-a.s)*(c.h-a.h)-(b.h-a.h)*(c.s-a.s);
+      if(cr>=0) hull.pop(); else break;
+    }
+    hull.push(i);
+  }
+  var mx=0, at=null, k=0;
+  for(i=0;i<n;i++){
+    while(k+1<hull.length-0 && P[hull[k+1]].s < P[i].s) k++;
+    var A=P[hull[k]], B=P[hull[Math.min(k+1,hull.length-1)]];
+    var hh = (B.s-A.s)>1e-9 ? A.h+(B.h-A.h)*(P[i].s-A.s)/(B.s-A.s) : A.h;
+    var dp=hh-P[i].h;
+    if(dp>mx){ mx=dp; at=P[i].s; }
+  }
+  return {max:mx, at:at};
+}
+
+function aProfile(rect, js){
+  try{
+    if(!js||js.length<4) return {ok:false, why:"가로 줄눈이 4줄에 못 미쳐 형상을 못 그립니다"};
+    var po=aPose(rect);
+    if(!po) return {ok:false, why:"사진에 초점 정보(EXIF)가 없어 «카메라 높이»를 못 구합니다 — 높이 없이는 밀림을 mm 로 못 바꿉니다"};
+    var N=po.nadir, pts=[], i;
+    for(i=0;i<js.length;i++){
+      var ok=js[i].pts.filter(function(q){return q.ok;});
+      if(ok.length<4) continue;
+      var meas=0, along=0, t;
+      for(t=0;t<ok.length;t++){ meas+=ok[t].d; along+=ok[t].s; }
+      meas/=ok.length; along/=ok.length;
+      var r=meas-js[i].pos;                       // 이상 격자 대비 잔차(mm)
+      var den=meas-N[1];                          // (P−N)·n̂  (가로 줄눈 → 법선은 y)
+      if(Math.abs(den)<150) continue;             // 발밑점 바로 아래는 감도가 없다
+      pts.push({s:js[i].pos, h:r*po.H/den, r:r, den:den, n:ok.length});
+    }
+    if(pts.length<4) return {ok:false, why:"쓸 만한 줄눈이 모자랍니다"};
+    /* ⚠⚠포화 —— 줄눈 찾기는 «있어야 할 자리 ±25%» 안만 뒤진다. 꺼짐이 크면
+       밀림이 그 창을 넘어가 더 못 따라가고, 그러면 «실제보다 얕게» 읽힌다.
+       합성 시험: 참 오목 14.6mm 가 9.2mm 로 읽혔다 — 그대로 두면 25mm 침하가
+       「조건부」로 나가 버린다. 창에 닿았으면 반드시 그렇게 말한다. */
+    var winMm=Math.min((+$("#aBh").value||100)+(+$("#aBj").value||2), 400)*0.25;
+    winMm=Math.min(winMm, 30);
+    var rmax=0;
+    for(i=0;i<pts.length;i++) if(Math.abs(pts[i].r)>rmax) rmax=Math.abs(pts[i].r);
+    var sat = rmax > winMm*0.6;
+    pts.sort(function(a,b){return a.s-b.s;});
+    /* 기울기(전체 경사)는 자가 어차피 걸러 낸다 — 형상만 남긴다 */
+    var span=pts[pts.length-1].s-pts[0].s;
+    /* 잡음 바닥 —— 이웃 차이로 가늠(높이는 완만, 낱장 편차는 제멋대로) */
+    var dif=[];
+    for(i=1;i<pts.length;i++) dif.push(Math.abs(pts[i].h-pts[i-1].h));
+    dif.sort(function(a,b){return a-b;});
+    var noise=dif.length? dif[dif.length>>1]*1.2 : null;
+    /* 3m 창을 밀어 가며 가장 오목한 곳 */
+    var best=null, WIN=3000;
+    if(span>=WIN){
+      for(i=0;i<pts.length;i++){
+        var seg=pts.filter(function(q){return q.s>=pts[i].s&&q.s<=pts[i].s+WIN;});
+        if(seg.length<4||seg[seg.length-1].s-seg[0].s<WIN*0.9) continue;
+        var g=aSag(seg);
+        if(g&&(!best||g.max>best.max)) best=g;
+      }
+    }
+    var whole=aSag(pts);
+    return {ok:true, n:pts.length, span:span, H:po.H, nadir:N, f:po.f,
+            sat:sat, rmax:rmax, win:winMm,
+            noise:noise, sag3m:best, sagAll:whole,
+            pts:pts.map(function(q){return {s:+q.s.toFixed(0), h:+q.h.toFixed(2)};})};
+  }catch(e){ return {ok:false, why:"형상 판독 오류: "+e.message}; }
+}
+
+/* ══════════════════════════════════════════════════════════════
    경계석 선 하나로 셋을 잰다
    --------------------------------------------------------------
    ① 자투리(조각블록) 폭 — 경계석과 마지막 온전한 블록 사이의 남은 폭
@@ -4661,7 +4782,7 @@ function aReadPlan(){
   var wOK = worstMm <= J/3;   // 폭만은 여전히 해상도가 필요하다
   var back=aBack(rect), rows=[], marks=[], inverted=false;
   /* ①② 재는 김에 같이 나오는 것 — 줄눈이 벌어지는 «자리»와 블록 낱장 편차 */
-  var pitchInfo=[], flare=[];
+  var pitchInfo=[], flare=[], hJoints=null;
   function run(axis){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
     var acr   = axis==="h" ? H : W;      // 줄눈이 늘어서는 방향
@@ -4670,6 +4791,7 @@ function aReadPlan(){
     if(cnt<1) return;
     var js=BlockScan.scanJoints(rect,{pitch:acr+J, first:(acr+J)-J/2, count:cnt,
       axis:axis, step:Math.max(6,along/10)});
+    if(axis==="h") hJoints=js;     /* 종단 형상은 «가로 줄눈»의 잔차에서 나온다 */
     var segLen=Math.min(span, seg*along+(seg-1)*J);
     /* ★줄눈 중심의 «실제» 자리(평균)로 이웃 간격을 잰다.
        ⚠이 간격의 평균은 축척이 정해 놓은 값이라 절대값이 못 된다 — 산포만 본다. */
@@ -4754,7 +4876,7 @@ function aReadPlan(){
   AM.auto=marks; AM.draw();
   aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
     pitchInfo:pitchInfo, flare:flare, tac:(function(){ aRes_tac=aTactile(rect); return aRes_tac; })(),
-    edge:null,
+    edge:null, prof:aProfile(rect, hJoints),
     geoBad:geoBad, appR:appR, claimR:claimR,
     persp:persp, worstMm:worstMm, perspBad:perspBad, resBad:resBad,
     rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
@@ -4815,6 +4937,44 @@ function aExtraHtml(){
   }else if(t&&t.why){
     h+='<div class="tiny" style="margin-top:12px;opacity:.7">🟨 축척 확인 — '+t.why+
        ' (점자블록이 화면에 들어오면 <b>법정 300mm</b>로 축척을 검증합니다)</div>';
+  }
+  /* ★자 없이 얻은 종단 형상 */
+  var pf=aRes.prof;
+  if(pf&&pf.ok){
+    var sg=pf.sag3m||pf.sagAll;
+    var enough=!!pf.sag3m;
+    var mmv=sg?sg.max:0;
+    var lim=STD.flat.std;
+    var blur = pf.noise!=null && mmv<pf.noise*1.5;
+    var g = !enough ? "조건부" : (blur? "조건부" : (mmv>lim? "불량" : (mmv>lim*0.8? "조건부":"합격")));
+    if(pf.sat && g!=="불량") g="조건부";
+    h+='<div class="ih" style="margin-top:12px">📉 자 없이 얻은 종단 형상</div>'+
+       '<div class="vd '+vdCls(g)+'"><div class="v1">'+g+'</div><div class="v2">'+
+       (enough? '3m 자 기준 가장 오목한 곳 <b>'+fx(mmv,1)+'mm</b> / 허용 '+lim+'mm'
+              : '이 사진이 담은 길이는 <b>'+fx(pf.span/1000,2)+'m</b>뿐입니다 — 3m 자 판정에는 3m 가 있어야 합니다. '+
+                '담긴 구간의 가장 오목한 곳은 <b>'+fx(mmv,1)+'mm</b>')+
+       '</div></div>'+
+       '<div class="kv"><span>어떻게 잰 건가</span><b>줄눈이 밀려 보인 양 → 높이</b></div>'+
+       '<div class="kv"><span>카메라 높이</span><b>'+fx(pf.H/1000,2)+'m (사진에서 계산)</b></div>'+
+       '<div class="kv"><span>측점</span><b>'+pf.n+'개 · 간격 '+fx(pf.span/Math.max(1,pf.n-1),0)+'mm</b></div>'+
+       (pf.noise!=null? '<div class="kv"><span>가름한계</span><b>±'+fx(pf.noise,1)+'mm (블록 낱장 편차가 섞인 바닥)</b></div>':'')+
+       (sg&&sg.at!=null? '<div class="kv"><span>가장 오목한 자리</span><b>시작점에서 '+fx(sg.at,0)+'mm</b></div>':'');
+    if(pf.sat)
+      h+='<div class="warnbox">⚠ <b>밀림이 탐색 한계(±'+fx(pf.win,0)+'mm)에 닿았습니다</b> — 읽힌 '+fx(mmv,1)+
+         'mm 는 <b>실제보다 얕을 수 있습니다</b>. 크게 꺼진 자리는 이 방법이 따라가지 못합니다. '+
+         '<b>자를 대고 옆에서 찍는 측면 판독</b>으로 확인하십시오.</div>';
+    if(blur)
+      h+='<div class="warnbox">읽힌 오목 '+fx(mmv,1)+'mm 가 <b>가름한계 ±'+fx(pf.noise,1)+'mm 에 묻힙니다</b> — '+
+         '이 사진으로는 «평평하다»고도 «꺼졌다»고도 말할 수 없습니다. 더 가까이서 찍으십시오.</div>';
+    if(!enough)
+      h+='<div class="tiny" style="margin-top:6px">사진 한 장이 담는 깊이는 대개 1m 안팎입니다. '+
+         '<b>구획 네 점을 앞뒤로 끌어 넓히면</b> 담기는 길이가 늘어납니다(멀어질수록 줄눈이 흐려지니 그만큼만). '+
+         '3m 판정을 하려면 <b>같은 줄을 이어서 여러 장</b> 찍어 잇는 방법이 필요합니다(아직 없습니다). '+
+         '지금은 <b>국부 침하 찾기</b>에 쓰십시오 — 한 자리가 꺼진 것은 이 길이로도 보입니다.</div>';
+    h+='<div class="tiny" style="margin-top:6px;opacity:.75">원리 — 바닥이 h 만큼 꺼지면 그 자리는 발밑점에서 멀어지는 쪽으로 '+
+       'd·h/H 만큼 밀려 보입니다. 그 밀림을 줄눈 자리에서 읽어 높이로 되돌린 것입니다.</div>';
+  }else if(pf&&pf.why){
+    h+='<div class="tiny" style="margin-top:12px;color:#F5A524">📉 종단 형상 — '+pf.why+'</div>';
   }
   /* 경계석 선으로 나오는 셋 */
   var e=aRes.edge;
