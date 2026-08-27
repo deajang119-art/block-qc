@@ -4509,6 +4509,210 @@ function aTactile(rect){
 }
 
 /* ══════════════════════════════════════════════════════════════
+   여러 장 이어 붙이기 —— 3m 를 채운다
+   --------------------------------------------------------------
+   사진마다 기준 평면이 다르다(그 사진의 구획 네 점을 지나는 평면). 두 사진이
+   겹치면 그 자리는 같은 실제 바닥이고, 두 평면의 차이는 직선(기울기+치우침)이다.
+   겹친 자리에서 그 직선을 맞추면 이어진다.
+   ⚠⚠기울기 맞춤에는 오차가 있고 그것이 «누적»된다 — 네 번 이으면 끝에서 몇 mm 가
+     쌓인다. 허용 10mm 인데 누적 5mm 면 판정이 무의미하다. 그래서 누적 오차를
+     계산해 같이 내놓는다. 그게 이 기능의 정직한 형태다.
+══════════════════════════════════════════════════════════════ */
+var STITCH={list:[]};
+
+/* 겹친 자리에서 「B + (a0 + a1·s) ≈ A」 인 직선을 맞춘다 */
+function aRampFit(pr){
+  var n=pr.length, i, ss=0, sd=0;
+  for(i=0;i<n;i++){ ss+=pr[i].s; sd+=(pr[i].a-pr[i].b); }
+  var ms=ss/n, md=sd/n, sxx=0, sxy=0;
+  for(i=0;i<n;i++){ var x=pr[i].s-ms, y=(pr[i].a-pr[i].b)-md; sxx+=x*x; sxy+=x*y; }
+  var a1 = sxx>1e-9 ? sxy/sxx : 0, a0 = md - a1*ms;
+  var r2=0;
+  for(i=0;i<n;i++){ var e=(pr[i].b+a0+a1*pr[i].s)-pr[i].a; r2+=e*e; }
+  var rms=Math.sqrt(r2/n);
+  /* 기울기의 표준오차 — 누적 오차는 여기서 나온다 */
+  var sb = (sxx>1e-9 && n>2) ? Math.sqrt(r2/(n-2)/sxx) : Infinity;
+  return {a0:a0, a1:a1, rms:rms, sb:sb, n:n};
+}
+
+function aStitch(list){
+  if(!list||list.length<2) return {ok:false, why:"사진이 두 장은 있어야 잇습니다"};
+  var pitch=list[0].pitch;
+  for(var t=1;t<list.length;t++)
+    if(Math.abs(list[t].pitch-pitch)>0.5)
+      return {ok:false, why:"사진마다 블록 규격·장수가 다릅니다 — 같은 설정으로 찍은 것만 이을 수 있습니다"};
+  var merged=list[0].pts.map(function(p){return {s:p.s-list[0].pts[0].s, h:p.h};});
+  /* ⚠어긋남은 «첫 사진 기준»으로 누적해야 한다. 사람이 넣는 칸수는 «앞
+     사진에서» 옮긴 칸이므로 더해 가며 써야 한다(안 그러면 두 번째부터
+     제자리에 겹쳐 붙어 길이가 안 늘어난다 — 합성 시험에서 3.09m 가 1.54m 로). */
+  var baseS=merged[0].s, kAcc=0;
+  var joins=[], evar=0, i, j, k;
+  for(i=1;i<list.length;i++){
+    var B=list[i].pts, b0=B[0].s, nB=B.length;
+    merged.sort(function(a,b){return a.s-b.s;});
+    var minS=merged[0].s, maxS=merged[merged.length-1].s;
+    var best=null, second=null;
+    /* ⚠앞으로 걸어도 뒤로 걸어도 되어야 한다 — 새 사진이 앞쪽에 붙을 수도
+       뒤쪽에 붙을 수도 있으므로 «음수 어긋남»까지 뒤진다. */
+    var kLo=-(nB-1), kHi=Math.round((maxS-minS)/pitch)+(nB-1);
+    for(k=kLo;k<=kHi;k++){
+      var pr=[];
+      for(j=0;j<B.length;j++){
+        var sm=minS+k*pitch+(B[j].s-b0);
+        var near=null, nd=pitch*0.25;
+        for(var q=0;q<merged.length;q++){
+          var d=Math.abs(merged[q].s-sm);
+          if(d<nd){ nd=d; near=merged[q]; }
+        }
+        if(near) pr.push({s:sm, a:near.h, b:B[j].h});
+      }
+      if(pr.length<4) continue;
+      var f=aRampFit(pr);
+      if(!best||f.rms<best.rms){ second=best; best={k:k,f:f,n:pr.length}; }
+      else if(!second||f.rms<second.f.rms) second={k:k,f:f,n:pr.length};
+    }
+    /* ★★사람이 «몇 칸 옮겼는지» 말해 주면 그걸 쓴다.
+       ⚠겹침만으로 어긋남을 찾는 것은 안 된다 —— 짧은 겹침에서는 직선(기울기)
+         맞춤이 웬만한 어긋남을 다 흡수해 버려, 엉뚱한 자리가 더 잘 맞는다.
+         (합성 시험: 참 5칸인데 3칸이 rms 0.50 으로 5칸의 1.18 을 이겼다)
+         블록은 눈으로 셀 수 있다 — 세는 쪽이 확실하다. */
+    if(list[i].step!=null&&list[i].step>0){
+      kAcc+=Math.round(list[i].step);
+      var kf=kAcc, prf=[];
+      for(j=0;j<B.length;j++){
+        var sf=baseS+kf*pitch+(B[j].s-b0), nf=null, ndf=pitch*0.25;
+        for(var qf=0;qf<merged.length;qf++){ var df=Math.abs(merged[qf].s-sf); if(df<ndf){ndf=df;nf=merged[qf];} }
+        if(nf) prf.push({s:sf, a:nf.h, b:B[j].h});
+      }
+      if(prf.length<4)
+        return {ok:false, why:(i+1)+"번째 사진: "+kf+"칸 옮겼다면 겹침이 "+prf.length+"칸뿐입니다 — 4칸 이상 겹치게 찍으십시오"};
+      var ff=aRampFit(prf);
+      var told={k:kf, f:ff, n:prf.length};
+      /* 사람이 준 칸수가 다른 후보보다 훨씬 나쁘면 알려 준다(찍어 맞히진 않는다) */
+      told.suspect = !!(best && best.k!==kf && ff.rms > best.f.rms*2.2+0.5);
+      second=null; best=told;
+    }
+    if(!best) return {ok:false, why:(i+1)+"번째 사진이 겹치는 자리를 못 찾았습니다 — 앞 사진과 «절반쯤» 겹치게 찍으십시오"};
+    if(best.n<4) return {ok:false, why:(i+1)+"번째 사진의 겹침이 "+best.n+"칸뿐입니다 — 4칸 이상 겹쳐야 기울기가 정해집니다"};
+    if(second && !(second.f.rms > best.f.rms*1.6+0.3))
+      return {ok:false, why:(i+1)+"번째 사진이 «어디에» 겹치는지 못 가리겠습니다 — 격자는 되풀이라 단서가 못 됩니다. "+
+                            "겹침을 더 두거나, 굴곡이 있는 구간에서 이으십시오"};
+    /* 붙인다 —— 이미 있는 자리는 두고, 새로 늘어난 만큼만 넣는다 */
+    var f2=best.f, kk=best.k, added=[];
+    var org=(list[i].step!=null&&list[i].step>0)? baseS : minS;
+    for(j=0;j<B.length;j++){
+      var s2=org+kk*pitch+(B[j].s-b0);
+      var dup=false;
+      for(var q2=0;q2<merged.length;q2++) if(Math.abs(merged[q2].s-s2)<pitch*0.25){ dup=true; break; }
+      if(dup) continue;
+      merged.push({s:s2, h:B[j].h+f2.a0+f2.a1*s2});
+      added.push(s2);
+    }
+    /* 누적 오차 — 기울기 오차 × 이 사진이 «새로 늘린» 길이 */
+    var ext = added.length ? (Math.max.apply(null,added)-Math.min.apply(null,added)) : 0;
+    var e1 = isFinite(f2.sb)? f2.sb*ext : Infinity;
+    evar += e1*e1;
+    joins.push({k:kk, overlap:best.n, rms:f2.rms, ext:ext, err:e1,
+                told:(list[i].step!=null&&list[i].step>0), suspect:!!best.suspect});
+  }
+  merged.sort(function(a,b){return a.s-b.s;});
+  var s00=merged[0].s;
+  for(i=0;i<merged.length;i++) merged[i].s-=s00;      // 처음을 0 으로
+  var span=merged[merged.length-1].s-merged[0].s;
+  /* ⚠오차는 두 갈래다 —— ①이음마다 기울기를 맞추며 쌓이는 것 ②사진 안의
+     측점 잡음. 오목은 여러 점의 «최댓값»이라 잡음이 그대로 부풀린다
+     (합성 시험: 참 2.9mm 인 거의 평평한 바닥이 6.4mm 로 읽혔다).
+     최댓값에 실리는 잡음은 대략 1.8σ 로 본다. */
+  var nz=[];
+  for(i=0;i<list.length;i++) if(list[i].noise!=null) nz.push(list[i].noise);
+  nz.sort(function(a,b){return a-b;});
+  var medN = nz.length? nz[nz.length>>1] : 0;
+  var acc=Math.sqrt(evar + (1.8*medN)*(1.8*medN));
+  var WIN=3000, best3=null;
+  if(span>=WIN){
+    for(i=0;i<merged.length;i++){
+      var seg=merged.filter(function(q){return q.s>=merged[i].s&&q.s<=merged[i].s+WIN;});
+      if(seg.length<6||seg[seg.length-1].s-seg[0].s<WIN*0.9) continue;
+      var g=aSag(seg);
+      if(g&&(!best3||g.max>best3.max)) best3=g;
+    }
+  }
+  return {ok:true, n:merged.length, span:span, joins:joins, acc:acc,
+          sag3m:best3, sagAll:aSag(merged), pts:merged};
+}
+
+function renderStitch(){
+  var el=$("#aStitchBox"); if(!el) return;
+  var L=STITCH.list;
+  if(!L.length){ el.innerHTML='<div class="tiny" style="opacity:.7">담은 사진이 없습니다. 형상이 나온 사진에서 «이어 재기에 담기»를 누르십시오.</div>'; return; }
+  var h='<div class="kv"><span>담은 사진</span><b>'+L.length+'장 · '+
+        L.map(function(x){return fx(x.span/1000,2)+"m";}).join(" + ")+'</b></div>';
+  /* ★몇 칸 옮겼는지는 «눈으로 세는» 쪽이 확실하다 */
+  h+='<div class="tiny" style="margin:6px 0">사진마다 <b>앞 사진에서 몇 칸(블록) 옮겼는지</b> 넣으십시오 — '+
+     '겹침만으로는 앱이 못 가립니다(짧은 겹침에서는 기울기 맞춤이 어긋남을 흡수합니다).</div>';
+  for(var si=1;si<L.length;si++){
+    h+='<div class="kv"><span>'+(si+1)+'번째 사진 · 옮긴 칸수</span>'+
+       '<b><input type="number" data-step="'+si+'" value="'+(L[si].step!=null?L[si].step:"")+
+       '" min="1" style="width:80px;padding:5px" placeholder="예: 5" /> 칸</b></div>';
+  }
+  if(L.length<2){ h+='<div class="tiny" style="margin-top:6px">한 장 더 담으면 이어 붙입니다 — 앞 사진과 <b>절반쯤 겹치게</b> 찍으십시오.</div>'; el.innerHTML=h; return; }
+  var R=aStitch(L);
+  if(!R.ok){
+    h+='<div class="warnbox">'+R.why+'</div>'+
+       '<div class="btnrow" style="margin-top:9px"><button class="btn gray" id="aStitchClear">비우기</button></div>';
+    el.innerHTML=h;
+    $("#aStitchClear").onclick=function(){ STITCH.list=[]; renderStitch(); };
+    $$("#aStitchBox [data-step]").forEach(function(inp){
+      inp.onchange=function(){
+        var v=parseInt(inp.value,10);
+        STITCH.list[+inp.dataset.step].step=(v>0?v:null);
+        renderStitch();
+      };
+    });
+    return;
+  }
+  var enough=!!R.sag3m, sg=R.sag3m||R.sagAll, mmv=sg?sg.max:0, lim=STD.flat.std;
+  /* ★오차 막대를 판정에 그대로 반영한다 —— 읽힌 값 하나로 자르지 않는다.
+       읽힌값 − 오차 > 허용   → 확실히 초과라 «불량»
+       읽힌값     > 허용      → 넘겨 읽혔으나 오차에 걸침 → «조건부»
+       읽힌값 + 오차 > 허용   → 안쪽이지만 오차를 보면 넘을 수 있음 → «조건부» */
+  var poor = R.acc > lim*0.5;
+  var g;
+  if(!enough) g="조건부";
+  else if(mmv-R.acc>lim) g="불량";
+  else if(mmv>lim) g="조건부";
+  else if(mmv+R.acc>lim) g="조건부";
+  else g="합격";
+  h+='<div class="vd '+vdCls(g)+'"><div class="v1">'+g+'</div><div class="v2">'+
+     (enough? '이어 붙인 <b>'+fx(R.span/1000,2)+'m</b> · 3m 자 기준 가장 오목한 곳 <b>'+fx(mmv,1)+'mm</b> / 허용 '+lim+'mm'
+            : '이어 붙여 <b>'+fx(R.span/1000,2)+'m</b> — 3m 에 <b>'+fx((3000-R.span)/1000,2)+'m</b> 모자랍니다')+
+     '</div></div>'+
+     '<div class="kv"><span>이음</span><b>'+R.joins.length+'곳 · 겹침 '+
+       R.joins.map(function(x){return x.overlap+"칸";}).join("·")+'</b></div>'+
+     '<div class="kv"><span>이음 맞춤 오차</span><b>'+
+       R.joins.map(function(x){return fx(x.rms,2);}).join(" · ")+' mm</b></div>'+
+     '<div class="kv"><span>⚠누적 오차</span><b>±'+fx(R.acc,1)+'mm</b></div>';
+  var sus=R.joins.filter(function(x){return x.suspect;});
+  if(sus.length)
+    h+='<div class="warnbox">넣어 주신 <b>옮긴 칸수</b>가 사진끼리 잘 안 맞습니다 — 칸을 잘못 세었을 수 있습니다. '+
+       '다시 세어 보십시오(앱이 대신 정하지는 않습니다).</div>';
+  if(poor)
+    h+='<div class="warnbox">이음마다 기울기를 맞추는데 그 오차가 <b>쌓여 ±'+fx(R.acc,1)+'mm</b>가 되었습니다. '+
+       '허용값 '+lim+'mm 의 절반을 넘으므로 <b>이 값으로 합격을 줄 수 없습니다</b>. '+
+       '<b>겹침을 더 많이(절반 이상) 두고</b> 다시 이으십시오 — 겹침이 길수록 기울기가 정확해집니다.</div>';
+  h+='<div class="btnrow" style="margin-top:9px"><button class="btn gray" id="aStitchClear">비우기</button></div>';
+  el.innerHTML=h;
+  $("#aStitchClear").onclick=function(){ STITCH.list=[]; renderStitch(); };
+  $$("#aStitchBox [data-step]").forEach(function(inp){
+    inp.onchange=function(){
+      var v=parseInt(inp.value,10);
+      STITCH.list[+inp.dataset.step].step = (v>0? v : null);
+      renderStitch();
+    };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
    자 없이 종단 형상 —— 「바닥이 꺼지면 줄눈이 밀려 보인다」
    --------------------------------------------------------------
    카메라가 높이 H 에 있고 지면의 한 자리가 h 만큼 꺼져 있으면, 그 자리는
@@ -4972,7 +5176,9 @@ function aExtraHtml(){
          '3m 판정을 하려면 <b>같은 줄을 이어서 여러 장</b> 찍어 잇는 방법이 필요합니다(아직 없습니다). '+
          '지금은 <b>국부 침하 찾기</b>에 쓰십시오 — 한 자리가 꺼진 것은 이 길이로도 보입니다.</div>';
     h+='<div class="tiny" style="margin-top:6px;opacity:.75">원리 — 바닥이 h 만큼 꺼지면 그 자리는 발밑점에서 멀어지는 쪽으로 '+
-       'd·h/H 만큼 밀려 보입니다. 그 밀림을 줄눈 자리에서 읽어 높이로 되돌린 것입니다.</div>';
+       'd·h/H 만큼 밀려 보입니다. 그 밀림을 줄눈 자리에서 읽어 높이로 되돌린 것입니다.</div>'+
+       '<div class="btnrow" style="margin-top:9px"><button class="btn sec" id="aStitchAdd">➕ 3m 이어 재기에 담기</button></div>'+
+       '<div id="aStitchBox" style="margin-top:9px"></div>';
   }else if(pf&&pf.why){
     h+='<div class="tiny" style="margin-top:12px;color:#F5A524">📉 종단 형상 — '+pf.why+'</div>';
   }
@@ -5169,6 +5375,17 @@ function aRender(){
     addRec(aRes.rec); toast("✔ 기록에 저장했습니다"); go("rec");
   };
   $("#aAgain").onclick=function(){ $("#aStep3").classList.add("hide"); $("#aStep2").classList.remove("hide"); AM.fit(); };
+  if($("#aStitchAdd")){
+    $("#aStitchAdd").onclick=function(){
+      var pf=aRes.prof;
+      if(!pf||!pf.ok){ toast("담을 형상이 없습니다"); return; }
+      var pit=(+$("#aBh").value||100)+(+$("#aBj").value||2);
+      STITCH.list.push({pts:pf.pts, pitch:pit, span:pf.span, noise:pf.noise});
+      toast("📏 "+STITCH.list.length+"장째 담았습니다");
+      renderStitch();
+    };
+    renderStitch();
+  }
   $$("#aResBox .atab tr[data-i]").forEach(function(tr){
     tr.onclick=function(){ var i=+tr.dataset.i; aRes.rows[i].off=!aRes.rows[i].off; aRender(); };
   });

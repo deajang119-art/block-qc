@@ -57,7 +57,9 @@
     x.fillStyle = "#8e8e90"; x.fillRect(0, 0, IW, IH);        // 포장 밖
     var px = bw + jt, pz = bh + jt;
     var X0 = -(o.nx * px) / 2, Z0 = o.Z0;
-    var q = [cam.fwd(X0 - px, Z0), cam.fwd(X0 + (o.nx + 1) * px, Z0),
+    /* ⚠카메라 뒤(또는 바로 아래)의 지면은 투영이 뒤집힌다 — 근단을 잘라 둔다 */
+    var Zn = Math.max(Z0, 250);
+    var q = [cam.fwd(X0 - px, Zn), cam.fwd(X0 + (o.nx + 1) * px, Zn),
              cam.fwd(X0 + (o.nx + 1) * px, Z0 + o.nz * pz), cam.fwd(X0 - px, Z0 + o.nz * pz)];
     /* (배경 사각형은 굴곡 없이 그려도 된다 — 블록이 그 위를 덮는다) */
     x.fillStyle = "#3a3a3c";                                   // 줄눈(어두움)
@@ -68,15 +70,17 @@
     function rnd() { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; }
     /* ★굴곡 — 지면이 꺼져 있으면 블록도 그만큼 내려앉아 찍힌다.
        이게 있어야 「줄눈이 밀려 보인다」를 정답과 견줄 수 있다. */
-    var surf = o.surface
-      ? function (Z) {
-          var t = (Z - o.surface.at) / (o.surface.w || 250);
-          return -(o.surface.depth || 0) * Math.exp(-t * t);
-        }
-      : function () { return 0; };
+    var surf = o.surfFn ? o.surfFn
+      : (o.surface
+        ? function (Z) {
+            var t = (Z - o.surface.at) / (o.surface.w || 250);
+            return -(o.surface.depth || 0) * Math.exp(-t * t);
+          }
+        : function () { return 0; });
     function F(X, Z) { return cam.fwd3(X, Z, surf(Z)); }
     for (var j = 0; j < o.nz; j++) {
       var off = (o.bond === "run" && (j & 1)) ? px / 2 : 0;
+      if (Z0 + j * pz < 250) continue;                  // 카메라 앞쪽만 그린다
       for (var i = -1; i <= o.nx; i++) {
         var X = X0 + i * px + off, Z = Z0 + j * pz;
         var p1 = F(X, Z), p2 = F(X + bw, Z),
@@ -607,6 +611,125 @@
                       && (pf.sat || Math.abs(ag.max - tg.max) <= Math.max(2.5, tg.max * 0.3))) };
   }
 
+  /* ★여러 장을 이어 붙여 3m 를 채우는가.
+     같은 바닥을 카메라를 «뒤로» 물리며 여러 장 찍는다(뒤로 물리면 뒤에 붙는다).
+     격자는 되풀이라 단서가 못 되므로, 굴곡이 있는 바닥으로 시험한다. */
+  /* 굴곡 세기를 바꿔 가며 시험할 수 있게 — 크게 꺼지면 격자 검출 자체가 흔들린다 */
+  function longSurf(Zabs) {
+    var A = root.__AMP == null ? 1 : root.__AMP;
+    return A * (-8 * Math.exp(-Math.pow((Zabs - 1500) / 320, 2))
+              - 13 * Math.exp(-Math.pow((Zabs - 2600) / 260, 2))
+              - 5 * Math.exp(-Math.pow((Zabs - 3500) / 420, 2)));
+  }
+  async function shotAt(C, base) {
+    /* 카메라를 world 에서 C 만큼 옮긴 것 = 지면을 -C 만큼 옮긴 것 */
+    var o = Object.assign({}, base, {
+      Z0: base.Z0 - C,
+      surfFn: function (Zrel) { return longSurf(Zrel + C); }
+    });
+    var S = make(o), im = await load(S.url);
+    root.AM.img = im; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = S.o.bw;
+    document.querySelector("#aBh").value = S.o.bh;
+    document.querySelector("#aBj").value = S.o.jt;
+    document.querySelector("#aTol").value = 3;
+    document.querySelector("#aSeg").value = 10;
+    document.querySelector("#aCham").value = 0;
+    root.uF35 = S.o.f35; root.aMode = "plan"; root.aPat = "stack";
+    var P;
+    if (base.trueQuad) {
+      /* ★구획을 «정답 격자»에서 직접 잡는다 —— 사람이 네 점을 제대로 끌어
+         맞춘 상황이다. 구획 자동 검출의 널뜀(13행 ↔ 3행)과 이어 붙이기를
+         갈라서 보기 위한 것이다. */
+      var px2 = S.o.bw + S.o.jt, pz2 = S.o.bh + S.o.jt;
+      var X0b = -(S.o.nx * px2) / 2, jt2 = S.o.jt;
+      function jc(m, k) {                       // 줄눈 중심(세계) → 사진
+        var X = X0b + m * px2 - jt2 / 2, Z = o.Z0 + k * pz2 - jt2 / 2;
+        var e = (o.surfFn ? o.surfFn(Z) : 0);
+        var p = S.cam.fwd3(X, Z, e);
+        return { x: p[0], y: p[1], X: X, Z: Z };
+      }
+      function inFrame(p) {
+        return p.x > S.o.IW * 0.08 && p.x < S.o.IW * 0.92
+            && p.y > S.o.IH * 0.12 && p.y < S.o.IH * 0.94;
+      }
+      var kk = [], mm = [], t2;
+      for (t2 = 1; t2 < S.o.nz; t2++) { var q0 = jc(Math.round(S.o.nx / 2), t2); if (inFrame(q0)) kk.push(t2); }
+      for (t2 = 1; t2 < S.o.nx; t2++) { var q1 = jc(t2, kk.length ? kk[kk.length - 1] : 1); if (inFrame(q1)) mm.push(t2); }
+      if (kk.length < 5 || mm.length < 4) return { ok: false, why: "정답 구획을 못 잡음" };
+      var k0 = kk[0], k1 = kk[Math.min(kk.length - 1, k0 + 13 - 1 - k0 + k0)];
+      k1 = kk[Math.min(kk.length - 1, 12)];
+      var m0 = mm[0], m1 = mm[Math.min(mm.length - 1, 14)];
+      var c1 = jc(m0, k0), c2 = jc(m1, k0), c3 = jc(m1, k1), c4 = jc(m0, k1);
+      P = { ok: true, nc: m1 - m0, nr: k1 - k0,
+            quad: [{ x: c1.x, y: c1.y }, { x: c2.x, y: c2.y }, { x: c3.x, y: c3.y }, { x: c4.x, y: c4.y }] };
+    } else {
+      P = root.aFindQuad(im);
+      if (!P.ok) return { ok: false, why: P.why };
+    }
+    root.AM.pts.quad = P.quad.map(function (q) { return { x: q.x, y: q.y }; });
+    root.AM.pts.pair = [];
+    document.querySelector("#aNc").value = P.nc;
+    document.querySelector("#aNr").value = P.nr;
+    try { root.aReadPlan(); } catch (e) { return { ok: false, why: "판독 " + e.message }; }
+    var pf = root.aRes && root.aRes.prof;
+    if (!pf || !pf.ok) return { ok: false, why: (pf && pf.why) || "형상 없음" };
+    /* 이 사진이 담은 world Z 범위(참값 비교용) */
+    var wq = P.quad.map(function (q) { return S.cam.back(q.x, q.y); });
+    var zFar = (wq[0][1] + wq[1][1]) / 2, zNear = (wq[2][1] + wq[3][1]) / 2;
+    var hmm = P.nr * S.o.bh + (P.nr - 1) * S.o.jt;
+    return { ok: true, prof: pf, pitch: S.o.bh + S.o.jt,
+             zAt: function (sv) { return (zFar + (zNear - zFar) * (sv / hmm)) + C; } };
+  }
+  async function stitchShots(nShot, step, base) {
+    /* 여러 걸음을 담으려면 격자가 «세계»에서 길게 깔려 있어야 한다 */
+    base = Object.assign({ deg: 25, h: 1500, Z0: -2000, nz: 90 }, base || {});
+    root.STITCH.list = [];
+    var zmap = [];
+    for (var i = 0; i < nShot; i++) {
+      var r = await shotAt(-i * step, base);            // 뒤로 물러선다
+      if (!r.ok) return { ok: false, why: (i + 1) + "번째: " + r.why };
+      root.STITCH.list.push({ pts: r.prof.pts, pitch: r.pitch,
+                              span: r.prof.span, noise: r.prof.noise,
+                              /* 현장에서는 사람이 «몇 칸 옮겼는지» 세어 넣는다 */
+                              step: i === 0 ? null : Math.round(step / r.pitch) });
+      zmap.push(r);
+    }
+    return { ok: true, zmap: zmap };
+  }
+  async function stitchCheck(name, nShot, step, base) {
+    var g = await stitchShots(nShot, step, base);
+    if (!g.ok) return { name: name, ok: false, why: g.why };
+    var R = root.aStitch(root.STITCH.list);
+    if (!R.ok) return { name: name, ok: false, why: R.why, 장수: nShot };
+    /* 참값 —— 이은 구간의 world Z 범위에서 실제 바닥의 3m 오목 */
+    /* ⚠사진마다 s=0 이 근단일 수도 원단일 수도 있다 — 모든 끝점을 모아 범위를 잡는다 */
+    var zAll = [];
+    g.zmap.forEach(function (m) { zAll.push(m.zAt(0)); zAll.push(m.zAt(m.prof.span)); });
+    var za = Math.min.apply(null, zAll), zb = Math.max.apply(null, zAll);
+    var truth = [];
+    for (var Z = za; Z <= zb; Z += 25) truth.push({ s: Z - za, h: longSurf(Z) });
+    var tg3 = null;
+    if (zb - za >= 3000) {
+      for (var a = 0; a + 3000 <= zb - za; a += 25) {
+        var seg = truth.filter(function (q) { return q.s >= a && q.s <= a + 3000; });
+        var gg = root.aSag(seg);
+        if (gg && (!tg3 || gg.max > tg3.max)) tg3 = gg;
+      }
+    }
+    var tgAll = root.aSag(truth);
+    return { name: name, ok: true, 장수: nShot, 걸음mm: step,
+             이은길이m: +(R.span / 1000).toFixed(2), 참길이m: +((zb - za) / 1000).toFixed(2),
+             잰3m오목: R.sag3m ? +R.sag3m.max.toFixed(1) : null,
+             참3m오목: tg3 ? +tg3.max.toFixed(1) : null,
+             잰전체오목: R.sagAll ? +R.sagAll.max.toFixed(1) : null,
+             참전체오목: tgAll ? +tgAll.max.toFixed(1) : null,
+             누적오차: +R.acc.toFixed(1),
+             겹침: R.joins.map(function (x) { return x.overlap; }).join("·"),
+             이음오차: R.joins.map(function (x) { return +x.rms.toFixed(2); }).join("·"),
+             pass: !!(R.sag3m && tg3 && Math.abs(R.sag3m.max - tg3.max) <= Math.max(3, R.acc + 2)) };
+  }
+
   async function runMM() {
     var out = [];
     for (var i = 0; i < CASES.length; i++) {
@@ -620,5 +743,6 @@
                    make: make, load: load, CASES: CASES,
                    sideMake: sideMake, sideCheck: sideCheck, runSide: runSide, SIDE: SIDE,
                    classifyCheck: classifyCheck, tacCheck: tacCheck, edgeCheck: edgeCheck,
-                   profCheck: profCheck };
+                   profCheck: profCheck, stitchCheck: stitchCheck, shotAt: shotAt,
+                   stitchShots: stitchShots, longSurf: longSurf };
 })(typeof window !== "undefined" ? window : globalThis);
