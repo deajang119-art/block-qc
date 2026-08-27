@@ -3076,14 +3076,14 @@ function jStdText(){
     $("#jStdBox").innerHTML=
       '<div class="kv"><span>허용 편차(사내 제안)</span><b>±3mm</b></div>'+
       '<div class="kv"><span>조건부 상한</span><b>허용값 ×1.7 · 초과율 10%</b></div>'+
-      '<div class="kv"><span>근거</span><b class="stdtag">LH 41740 3.4 마(이음선 일직선)를 정량화</b></div>';
+      '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointLine.src+'</b></div>';
     $("#jTol").value=STD.jointLine.tol;
   }else{
     $("#jIntro").innerHTML="<b>줄눈 폭</b> — 줄눈 양쪽 가장자리 2점을 한 쌍으로 찍습니다. 3개소 이상 반복하면 평균·최대·편차가 나옵니다.";
     $("#jStdBox").innerHTML=
-      '<div class="kv"><span>표준 줄눈 폭</span><b>2mm</b></div>'+
-      '<div class="kv"><span>허용 상한</span><b>3mm</b></div>'+
-      '<div class="kv"><span>근거</span><b class="stdtag">LH 41740 3.4 다 — 밀착·균일, 2mm 표준</b></div>';
+      '<div class="kv"><span>줄눈 폭</span><b>'+STD.jointWidth.min+'mm ~ '+STD.jointWidth.max+'mm 이내로 유지</b></div>'+
+      '<div class="kv"><span>하한이 있습니다</span><b>'+STD.jointWidth.min+'mm 미만은 불량</b></div>'+
+      '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' 「블록의 간격은 2mm~3mm 이내로 유지」</b></div>';
     $("#jTol").value=STD.jointWidth.max;
   }
 }
@@ -3644,8 +3644,10 @@ $("#recPrint").onclick=function(){
     "<tr><th>검측 위치</th><td class='l'>"+(s.loc||"")+"</td><th>검측자</th><td>"+(s.who||"")+"</td></tr>"+
     "<tr><th>포장 종류</th><td class='l'>"+(s.type||"")+"</td><th>블록 규격</th><td>"+(s.spec||"")+"</td></tr>"+
     "<tr><th>종합 판정</th><td class='l'><b>"+tot+"</b> (합격 "+ok+" / 조건부 "+cau+" / 불량 "+ng+")</td><th>비고</th><td>"+(s.memo||"")+"</td></tr></table>"+
-    "<div class='box'><b>적용 기준</b> — 평탄성: 3m 직선자 오목 깊이 10mm 이내 / 구배: 명시 구배 ±0.4% / 블록 고저차: 2mm 이내 / 줄눈 폭: 2mm 표준 "+
-    "(LH 전문시방서 41740 「보차도용 콘크리트 인터로킹블록 포장」 3.4·3.7.1). 보도 종·횡단경사는 국토교통부 「보도 설치 및 관리 지침」 병행 적용.<br>"+
+    "<div class='box'><b>적용 기준</b> — 평탄성: 3m 직선자 오목 깊이 10mm 이내 / 구배: 명시 구배 ±0.4% / 블록 고저차: 2mm 이내 / 계획고 ±20mm "+
+    "(<b>국가건설기준 KCS 44 70 05 「시멘트 콘크리트 블록포장」 3.4.1(9) 표 3.1-2</b>) / 줄눈 폭: 2mm~3mm 이내로 유지(같은 기준 3.4.2(2)).<br>"+
+    "<b>측정 방법</b>은 서울시 「보도공사 설계시공 매뉴얼(ver 2.0)」 4.2.3(2) — 워킹 프로파일미터 7m/km 이하 또는 3m 직선자 오목 10mm 이하. "+
+    "보도 기울기 1/20(5.0%)은 장애인등편의법 시행규칙 [별표2] 1.나.(3) <b>법령</b>이며, 국토교통부 「보도 설치 및 관리 지침」(횡단 1/25)은 지침으로 병행 적용.<br>"+
     "<b>줄눈 통직도 ±3mm</b>는 시방에 수치가 없어 사내 제안값을 적용했으며, 판정 근거를 기록에 함께 남깁니다.</div>"+
     "<table><tr><th>No</th><th>검측 항목</th><th>위치</th><th>측정값</th><th>기준</th><th>판정</th><th>상세</th><th>일시</th></tr>"+rows+"</table>"+
     (pics? "<h3 style='font-size:12pt;margin:14px 0 8px'>측정 사진</h3>"+pics : "")+
