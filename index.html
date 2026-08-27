@@ -4437,13 +4437,9 @@ function spClassify(){
   catch(err){ k={kind:"?",why:"살펴보다 오류: "+err.message}; }
   if(k.kind==="side"){ spOpenSide(k.side); return; }
   if(k.kind==="plan"){ spOpenPlan(k.plan); return; }
-  /* ★못 가리겠으면 찍어 맞히지 않는다 — 사람에게 묻는다 */
-  $("#spMsg").innerHTML='<div class="warnbox">⚠ <b>이 사진이 무엇인지 못 가리겠습니다.</b><br>'+k.why+
-    '</div><div class="btnrow" style="margin-top:9px">'+
-    '<button class="btn sec" id="spAsSide">자를 옆에서 찍었다</button>'+
-    '<button class="btn sec" id="spAsPlan">위에서 줄눈을 찍었다</button></div>';
-  $("#spAsSide").onclick=function(){ spOpenSide(null); };
-  $("#spAsPlan").onclick=function(){ spOpenPlan(null); };
+  /* ★묻지 않는다 —— 못 가려도 흔한 쪽(위에서 본 사진)으로 그냥 본다.
+     사람에게 «이게 뭐냐»고 되묻는 것은 쓰는 사람 몫이 아니다. */
+  spOpenPlan(null);
 }
 
 /* 판독 화면(④)을 «측점의 다음 단계»로 연다. 네 점은 이미 놓여 있고,
@@ -4494,7 +4490,15 @@ function spOpenSide(S){
       "어긋났으면 <b>끌어서</b> 고치십시오 — 끄는 동안 확대창이 따라옵니다.";
     AM.draw();
     aPhase();
-    setTimeout(function(){ try{ aReadSide(); }catch(e){} }, 30);   /* 바로 판독 */
+    setTimeout(function(){
+      try{ aReadSide(); }catch(e){ return; }
+      /* ★자 밑에 틈이 없으면 «자 사진»이 아니다 — 묻지 말고 평면으로 다시 본다 */
+      if(aRes&&aRes.kind==="side"&&aRes.noGap){
+        var im2=AM.img, P2=null;
+        try{ P2=aFindQuad(im2); }catch(e2){}
+        spOpenPlan(P2&&P2.ok? P2 : null);
+      }
+    }, 30);
     return;
   } else {
     AM.pts.quad=[];
@@ -4896,11 +4900,32 @@ function aProfile(rect, js){
     if(!js||js.length<4) return {ok:false, why:"가로 줄눈이 4줄에 못 미쳐 형상을 못 그립니다"};
     var po=aPose(rect);
     if(!po) return {ok:false, why:"사진에 초점 정보(EXIF)가 없어 «카메라 높이»를 못 구합니다 — 높이 없이는 밀림을 mm 로 못 바꿉니다"};
-    var N=po.nadir, pts=[], i;
+    var N=po.nadir, pts=[], i, grid=[];
     for(i=0;i<js.length;i++){
       var ok=js[i].pts.filter(function(q){return q.ok;});
       if(ok.length<4) continue;
-      var meas=0, along=0, t;
+      /* ★자리마다 높이를 남긴다 —— 줄눈 하나에 평균 하나가 아니라, 줄눈을 따라
+         훑은 «스테이션»마다 하나씩. 그러면 선이 아니라 «면»이 된다.
+         (블록이 기울면 펴진 그림에서 사다리꼴로 일그러지는데, 그 일그러짐이
+          줄눈 자리의 밀림이고 밀림에서 높이가 나온다 — 같은 원리다) */
+      var row=[], t;
+      for(t=0;t<ok.length;t++){
+        var d1=ok[t].d-N[1];
+        if(Math.abs(d1)<150) continue;
+        row.push({x:ok[t].s, h:(ok[t].d-js[i].pos)*po.H/d1});
+      }
+      /* ⚠자리 하나하나는 «줄눈 평균»보다 잡음이 크다(평균은 10곳을 평균한 값이다).
+         이웃 셋으로 살짝 눌러 준다 — 바닥은 블록 한 장 크기에서는 완만하다. */
+      if(row.length>=3){
+        row.sort(function(a,b){return a.x-b.x;});
+        var sm2=row.map(function(q,k2){
+          var a4=0,c4=0;
+          for(var d4=-1;d4<=1;d4++){ var t4=k2+d4; if(t4<0||t4>=row.length) continue; a4+=row[t4].h; c4++; }
+          return {x:q.x, h:a4/c4};
+        });
+        grid.push({y:js[i].pos, row:sm2, raw:row});
+      }
+      var meas=0, along=0;
       for(t=0;t<ok.length;t++){ meas+=ok[t].d; along+=ok[t].s; }
       meas/=ok.length; along/=ok.length;
       var r=meas-js[i].pos;                       // 이상 격자 대비 잔차(mm)
@@ -4937,7 +4962,89 @@ function aProfile(rect, js){
       }
     }
     var whole=aSag(pts);
-    return {ok:true, n:pts.length, span:span, H:po.H, nadir:N, f:po.f,
+    /* ★★면에서 나오는 것 —— 종단·횡단·기울기·가장 꺼진 자리 */
+    var map=null;
+    if(grid.length>=4){
+      /* 줄눈마다 훑은 자리가 조금씩 다르니 가로를 같은 칸으로 묶는다 */
+      var xs=[];
+      grid.forEach(function(g){ g.row.forEach(function(q){ xs.push(q.x); }); });
+      xs.sort(function(a,b){return a-b;});
+      var xa=xs[0], xb=xs[xs.length-1], NB=Math.max(3,Math.min(9,Math.round((xb-xa)/150)));
+      var bw2=(xb-xa)/NB;
+      var cols=[];
+      for(var b=0;b<NB;b++) cols.push([]);
+      grid.forEach(function(g){
+        g.row.forEach(function(q){
+          var b2=Math.max(0,Math.min(NB-1,Math.floor((q.x-xa)/bw2)));
+          cols[b2].push({s:g.y, h:q.h, x:q.x});
+        });
+      });
+      /* 종단 —— 세로 칸마다 «길 방향» 프로파일을 만들어 가장 나쁜 것 */
+      var wl=null, wlx=null;
+      cols.forEach(function(c,bi){
+        if(c.length<4) return;
+        c.sort(function(p,q){return p.s-q.s;});
+        var g2=aSag(c);
+        if(g2&&(!wl||g2.max>wl.max)){ wl=g2; wlx=xa+(bi+0.5)*bw2; }
+      });
+      /* 횡단 —— 줄눈마다 «가로지르는» 프로파일. 경계석 옆 침하는 이쪽에서 잡힌다 */
+      var wc=null, wcy=null;
+      grid.forEach(function(g){
+        if(g.row.length<4) return;
+        var c2=g.row.map(function(q){return {s:q.x, h:q.h};}).sort(function(p,q){return p.s-q.s;});
+        var g3=aSag(c2);
+        if(g3&&(!wc||g3.max>wc.max)){ wc=g3; wcy=g.y; }
+      });
+      /* 기울기 —— 이웃한 자리 사이 높이차. 밟으면 덜컹거리는 그것.
+         ⚠가로 방향만 보면 «길 방향으로 기운 것»을 통째로 놓친다. 두 방향 다 본다. */
+      /* ⚠이웃한 자리끼리 재면 잡음이 그대로 기울기가 된다 —— 평평한 바닥도
+         14.6mm/m 가 나왔다(높이 잡음 1mm ÷ 103mm 간격). 재는 구간을 «250mm 이상»
+         으로 늘려 잡음을 눌러야 한다. 그래도 잡음 바닥은 따로 알려 준다. */
+      /* ⚠구간이 짧으면 잡음이 그대로 기울기가 된다 — 500mm 이상에서만 잰다 */
+      var BASE=500, slope=0, sat2=null;
+      function tryPair(x1,h1,x2,h2,y1,y2,dir){
+        var L2=Math.abs(x2-x1);
+        if(L2<BASE) return;
+        var sl=Math.abs(h2-h1)/L2*1000;
+        if(sl>slope){ slope=sl; sat2={x:(x1+x2)/2, y:(y1+y2)/2, dir:dir, base:L2}; }
+      }
+      grid.forEach(function(g){
+        var rr=g.row.slice().sort(function(p,q){return p.x-q.x;});
+        for(var a3=0;a3<rr.length;a3++) for(var b3=a3+1;b3<rr.length;b3++)
+          tryPair(rr[a3].x,rr[a3].h,rr[b3].x,rr[b3].h,g.y,g.y,"가로");
+      });
+      for(var gi=0;gi<grid.length;gi++) for(var gj=gi+1;gj<grid.length;gj++){
+        var A2=grid[gi], B2=grid[gj];
+        A2.row.forEach(function(q){
+          var near=null, nd2=1e9;
+          B2.row.forEach(function(p2){ var d2=Math.abs(p2.x-q.x); if(d2<nd2){nd2=d2;near=p2;} });
+          if(!near||nd2>60) return;
+          tryPair(A2.y,q.h,B2.y,near.h,q.x,q.x,"세로");
+        });
+      }
+      /* 가장 꺼진 자리 —— 면 전체에서 가장 낮은 곳(둘레 평균 대비) */
+      var all=[];
+      grid.forEach(function(g){ g.row.forEach(function(q){ all.push({x:q.x,y:g.y,h:q.h}); }); });
+      var hm=all.reduce(function(a,q){return a+q.h;},0)/all.length;
+      var low=all.slice().sort(function(a,b){return a.h-b.h;})[0];
+      /* 면의 «가름한계» —— 줄 안에서 이웃한 자리끼리의 차이로 가늠한다 */
+      var dd=[];
+      grid.forEach(function(g){
+        var rr2=g.raw||g.row;
+        for(var t5=1;t5<rr2.length;t5++) dd.push(Math.abs(rr2[t5].h-rr2[t5-1].h));
+      });
+      dd.sort(function(a,b){return a-b;});
+      /* ⚠줄 안 이웃끼리의 차이는 «같은 줄눈»에서 나온 값이라 서로 닮아 있어
+         잡음을 너무 작게 본다. 줄눈 평균의 잡음(noise)을 자리 수만큼 키워서
+         견주는 쪽이 정직하다 — 자리 하나는 평균보다 √n 배 시끄럽다. */
+      var byRow = dd.length? dd[dd.length>>1]*1.2 : null;
+      var mNoise = noise!=null ? Math.max(byRow||0, noise*3) : byRow;
+      map={n:all.length, cols:NB, rows:grid.length, noise:mNoise,
+           long:wl, longAt:wlx, cross:wc, crossAt:wcy,
+           slope:slope, slopeAt:sat2,
+           low:{x:low.x, y:low.y, drop:hm-low.h}};
+    }
+    return {ok:true, n:pts.length, span:span, H:po.H, nadir:N, f:po.f, map:map,
             sat:sat, rmax:rmax, win:winMm,
             noise:noise, sag3m:best, sagAll:whole,
             pts:pts.map(function(q){return {s:+q.s.toFixed(0), h:+q.h.toFixed(2)};})};
@@ -5213,7 +5320,10 @@ function aReadSide(){
   var back=aBack(rect);
   AM.auto=gp.filter(function(q){return q.ok;}).map(function(q){ return back(q.s,T+q.gap); });
   AM.draw();
-  aRes={kind:"side", r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"평탄성":"단차(고저차)",
+  /* ★자를 대면 어딘가는 반드시 뜬다. 전 구간이 거의 0 이면 «자 사진»이 아니다.
+     ⚠경고문을 띄워 되묻지 않는다 — 말없이 평면으로 다시 본다(spOpenSide 에서). */
+  var noGapNow = (r.n>=20 && r.avg<0.4 && r.max<2.5);
+  aRes={kind:"side", noGap:noGapNow, r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"평탄성":"단차(고저차)",
         dir:aKind==="flat"?(aDir==="cross"?"횡단":"종단"):null,
         mm:rect.mmPerPxSrc, mmCross:rect.mmPerPxCross};
   aRender();
@@ -5320,8 +5430,35 @@ function aExtraHtml(){
          '<b>구획 네 점을 앞뒤로 끌어 넓히면</b> 담기는 길이가 늘어납니다(멀어질수록 줄눈이 흐려지니 그만큼만). '+
          '3m 판정을 하려면 <b>같은 줄을 이어서 여러 장</b> 찍어 잇는 방법이 필요합니다(아직 없습니다). '+
          '지금은 <b>국부 침하 찾기</b>에 쓰십시오 — 한 자리가 꺼진 것은 이 길이로도 보입니다.</div>';
+    /* ★면에서 나온 것 —— 종단만이 아니라 횡단·기울기·꺼진 자리 */
+    var M=pf.map;
+    if(M){
+      h+='<div class="ih" style="margin-top:12px">🗺 면으로 본 바닥 (블록 '+M.rows+'줄 × '+M.cols+'칸)</div>'+
+         '<div class="tiny" style="margin-bottom:6px">블록이 꺼져서 기울면 펴진 그림에서 <b>사다리꼴로 일그러집니다</b>. '+
+         '그 일그러짐을 자리마다 읽어 <b>높이 지도</b>를 만든 것입니다.</div>';
+      function mmv2(v){ return fx(v,1)+'mm'+((M.noise!=null&&v<M.noise*1.5)?' <span class="badge b-cau">잡음에 묻힘</span>':''); }
+      if(M.cross)
+        h+='<div class="kv"><span>횡단(가로지름) 가장 오목</span><b>'+mmv2(M.cross.max)+'</b></div>';
+      if(M.long)
+        h+='<div class="kv"><span>종단(길 방향) 가장 오목</span><b>'+mmv2(M.long.max)+'</b></div>';
+      if(M.noise!=null)
+        h+='<div class="kv"><span>면 가름한계</span><b>±'+fx(M.noise,1)+'mm</b></div>';
+      h+='<div class="kv"><span>가장 꺼진 자리</span><b>둘레보다 '+fx(M.low.drop,1)+'mm 낮음 · '+
+         '가로 '+fx(M.low.x,0)+'mm · 세로 '+fx(M.low.y,0)+'mm</b></div>'+
+         '<div class="kv"><span>가장 급한 기울기 <span style="opacity:.6">(참고)</span></span><b>'+((M.slopeAt&&M.slopeAt.dir)? M.slopeAt.dir+' 쪽 · ':'')+
+         '1m 갈 때 '+fx(M.slope,1)+'mm'+
+         ((M.noise!=null && M.slope*(M.slopeAt?M.slopeAt.base:250)/1000 < M.noise*1.5)
+            ? ' <span class="badge b-cau">잡음에 묻힘</span>'
+            : (M.slope>10? ' <span class="badge b-cau">덜컹거림</span>':''))+'</b></div>';
+      if(M.cross&&M.long&&M.cross.max>M.long.max*1.6)
+        h+='<div class="warnbox">✔ <b>횡단이 종단보다 더 꺼졌습니다</b>('+fx(M.cross.max,1)+' vs '+fx(M.long.max,1)+'mm). '+
+           '<b>경계석·측구 옆이 길게 파인 자리</b>일 수 있습니다 — 종단으로만 재면 자가 파인 바닥을 따라가 '+
+           '<b>0mm 로 나옵니다</b>. 이 사진 한 장으로 둘 다 본 것입니다.</div>';
+    }
     h+='<div class="tiny" style="margin-top:6px;opacity:.75">원리 — 바닥이 h 만큼 꺼지면 그 자리는 발밑점에서 멀어지는 쪽으로 '+
-       'd·h/H 만큼 밀려 보입니다. 그 밀림을 줄눈 자리에서 읽어 높이로 되돌린 것입니다.</div>'+
+       'd·h/H 만큼 밀려 보입니다. 그 밀림을 줄눈 자리에서 읽어 높이로 되돌린 것입니다.<br>'+
+       '⚠ <b>단차(블록과 블록의 높이 턱)는 이 방법으로 못 잽니다</b> — 줄눈이 2~3mm 라 '+
+       '사진에서 두 블록의 모서리가 따로 안 보입니다. 단차는 자를 대고 <b>옆에서</b> 찍어야 합니다.</div>'+
        '<div class="btnrow" style="margin-top:9px"><button class="btn sec" id="aStitchAdd">➕ 3m 이어 재기에 담기</button></div>'+
        '<div id="aStitchBox" style="margin-top:9px"></div>';
   }else if(pf&&pf.why){
@@ -5479,17 +5616,12 @@ function aRender(){
     /* 최댓값만 보면 잡음 한 점에 속는다 — «평균»이 거의 0인 것이 진짜 신호다.
        실제 평탄성은 좋은 포장이라도 평균 1~3mm 는 뜬다.
        (현장 2차: 평균 0.15mm·최대 1.7mm 로 「합격」이 나왔다) */
-    var noGap = (r.n>=20 && r.avg<0.4 && r.max<2.5);
+    var noGap = !!aRes.noGap;
     var grade = (tooCoarse||noGap) ? "조건부" : r.grade;
     html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+
       (tooCoarse
         ? '판정 유보 — 허용 '+aRes.tol+'mm 가 '+fx(resPx,1)+'화소뿐이라 가릴 수 없습니다'
         : '최대 틈 '+fx(r.max,1)+'mm / 허용 '+aRes.tol+'mm')+'</div></div>';
-    if(noGap)
-      html+='<div class="warnbox">⚠ <b>자 밑에 틈이 전혀 없습니다</b>(전 구간 '+fx(r.max,1)+'mm). '+
-        '자를 대면 어딘가는 반드시 뜹니다 — <b>이 사진이 «자를 옆에서 찍은 것»이 맞습니까?</b><br>'+
-        '<b>위에서 내려다본 사진이라면</b> 이 값은 아무 뜻이 없습니다. 「평면 · 줄눈」으로 다시 보십시오 — '+
-        '그래야 <b>줄눈과 침하</b>가 나옵니다.</div>';
     if(tooCoarse)
       html+='<div class="tiny" style="color:#F5A524;margin:6px 0">읽힌 값 '+fx(r.max,1)+
         'mm 는 <b>판정 근거가 못 됩니다</b>. 자를 화면에 <b>'+fx(8/Math.max(resPx,1e-6),1)+

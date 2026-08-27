@@ -70,6 +70,9 @@
     function rnd() { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; }
     /* ★굴곡 — 지면이 꺼져 있으면 블록도 그만큼 내려앉아 찍힌다.
        이게 있어야 「줄눈이 밀려 보인다」를 정답과 견줄 수 있다. */
+    /* surf2(X,Z) 를 주면 «가로 자리»에 따라서도 꺼진 바닥을 만들 수 있다
+       — 경계석 옆이 길게 파인 것(종단으로는 원리적으로 안 잡히는 것) */
+    var surf2 = o.surf2 || null;
     var surf = o.surfFn ? o.surfFn
       : (o.surface
         ? function (Z) {
@@ -77,7 +80,7 @@
             return -(o.surface.depth || 0) * Math.exp(-t * t);
           }
         : function () { return 0; });
-    function F(X, Z) { return cam.fwd3(X, Z, surf(Z)); }
+    function F(X, Z) { return cam.fwd3(X, Z, surf2 ? surf2(X, Z) : surf(Z)); }
     for (var j = 0; j < o.nz; j++) {
       var off = (o.bond === "run" && (j & 1)) ? px / 2 : 0;
       if (Z0 + j * pz < 250) continue;                  // 카메라 앞쪽만 그린다
