@@ -208,7 +208,7 @@ details ul{padding-left:18px;margin:7px 0}
       <div class="ic">📚</div>
       <div class="tn">기준·방법·근거</div>
       <div class="td">시방 조항 원문 인용<br>측정 절차·빈도</div>
-      <div class="ts">LH 41740 · 국토부 지침</div>
+      <div class="ts">KCS 44 70 05 · 편의법 [별표1·2]</div>
     </button>
   </div>
 
@@ -304,7 +304,21 @@ details ul{padding-left:18px;margin:7px 0}
   </div>
 
   <div class="card">
-    <h3>③ 이 측점 판정</h3>
+    <h3>③ 레벨로 잰 값 — 계획고</h3>
+    <div class="tiny">사진으로는 <b>높이의 절대값</b>을 못 냅니다. 레벨(수준측량)로 잰 <b>계획고와의 차</b>를
+      넣으면 함께 판정합니다. 기준 <b>±20mm</b>(KCS 44 70 05 표 3.1-2) — 이 항목은 표에 있는데
+      앱에는 없었습니다.</div>
+    <div style="height:9px"></div>
+    <div class="grid2">
+      <div><label class="lab">계획고 차(mm)</label><input type="number" id="spLev" step="1" placeholder="예: -8 (낮으면 음수)" /></div>
+      <div><label class="lab">허용(±mm)</label><input type="number" id="spLevTol" value="20" /></div>
+    </div>
+    <div style="height:9px"></div>
+    <button class="btn sec" id="spLevOk">계획고 판정 넣기</button>
+  </div>
+
+  <div class="card">
+    <h3>④ 이 측점 판정</h3>
     <div id="spItems"></div>
     <div id="spSum"></div>
     <div class="btnrow" style="margin-top:10px">
@@ -696,7 +710,7 @@ details ul{padding-left:18px;margin:7px 0}
         </div>
         <div class="tiny" style="margin:6px 0 10px">★<b>경계석·측구 옆이 푹 꺼진 자리</b>는 경계선을 <b>따라</b> 길게 파입니다.
           종단으로 재면 자가 파인 바닥을 따라가 <b>0mm로 나옵니다</b> — 그런 자리는 반드시 <b>횡단</b>으로 재십시오.
-          기준(LH 41740 3.7.1 가)은 <b>종단·횡단 두 방향 모두</b> 요구합니다.</div>
+          평탄성 기준(KCS 44 70 05 표 3.1-2 · LH 41740 3.7.1 가)은 <b>종단·횡단 두 방향 모두</b> 요구합니다.</div>
       </div>
       <div class="grid2">
         <div><label class="lab">자 길이(mm)</label><input type="number" id="aRl" value="3000" /></div>
@@ -802,16 +816,24 @@ details ul{padding-left:18px;margin:7px 0}
     <h3>📚 검측 기준 · 방법 · 근거</h3>
     <div class="scrollx">
       <table>
-        <tr><th class="l">검측 항목</th><th>기준값</th><th class="l">근거</th></tr>
-        <tr><td class="l">평탄성</td><td>3m 직선자, 가장 오목한 곳 <b>10mm 이내</b></td><td class="l">LH 전문시방서 41740 3.7.1 가</td></tr>
-        <tr><td class="l">구배(경사)</td><td>명시 구배 대비 <b>±0.4%</b></td><td class="l">LH 전문시방서 41740 3.7.1 나</td></tr>
-        <tr><td class="l">블록 고저차(단차)</td><td>블록-블록, 블록-경계블록 <b>2mm 이내</b></td><td class="l">LH 전문시방서 41740 3.7.1 다</td></tr>
-        <tr><td class="l">줄눈 폭</td><td>밀착·균일, <b>2mm 표준</b></td><td class="l">LH 전문시방서 41740 3.4 다</td></tr>
-        <tr><td class="l">줄눈 선형(통직도)</td><td>기준선 대비 <b>±3mm</b> (사내 제안)</td><td class="l">41740 3.4 마의 정성규정을 정량화</td></tr>
-        <tr><td class="l">횡단구배(설계)</td><td>차도측·배수방향 <b>2%</b></td><td class="l">41740 1.5.2 가</td></tr>
-        <tr><td class="l">종단구배(설계)</td><td>보도 <b>1/18</b>↓(부득이 1/12), 산책로 최대 12%</td><td class="l">국토부 보도설치지침 / 41740 1.5.2 나</td></tr>
-        <tr><td class="l">보도 횡단경사(상한)</td><td><b>1/25(4%)</b>↓, 교통약자 고려 1/50(2%) 권장</td><td class="l">도로의 구조·시설 기준에 관한 규칙 / 보도설치지침</td></tr>
+        <tr><th class="l">검측 항목</th><th>기준값</th><th class="l">근거 (원문 대조 2026-08-27)</th></tr>
+        <tr><td class="l">평탄성</td><td><b>10mm</b></td><td class="l"><b>KCS 44 70 05</b> 3.4.1(9) 표 3.1-2 · LH 41740 3.7.1 가</td></tr>
+        <tr><td class="l">경사</td><td>명시 구배 대비 <b>±0.4%</b></td><td class="l"><b>KCS 44 70 05</b> 표 3.1-2 · LH 41740 3.7.1 나</td></tr>
+        <tr><td class="l">고저차(단차)</td><td>블록-블록, 블록-경계블록 <b>±2mm</b></td><td class="l"><b>KCS 44 70 05</b> 표 3.1-2 · LH 41740 3.7.1 다</td></tr>
+        <tr><td class="l">계획고</td><td><b>±20mm</b> (레벨 측량 — 앱은 못 잽니다)</td><td class="l"><b>KCS 44 70 05</b> 표 3.1-2</td></tr>
+        <tr><td class="l">줄눈 폭</td><td><b>2mm~3mm 이내로 유지</b> (조경·LH 계열은 5mm 초과 금지)</td><td class="l"><b>KCS 44 70 05</b> 3.4.2(2)</td></tr>
+        <tr><td class="l">줄눈 선형(통직도)</td><td>기준선 대비 <b>±3mm</b> — <b>사내 제안값</b></td><td class="l">KCS 44 70 05 3.4.2(1) 「실줄에 따라 깔아야 한다」의 정량화</td></tr>
+        <tr><td class="l">실줄(겨냥줄)</td><td>안정층 위 <b>100mm</b> (조경·투수블록 계열은 블록 마감면 위 <b>20mm</b>)</td><td class="l">KCS 44 70 05 3.4.2(1)</td></tr>
+        <tr><td class="l">모래 안정층</td><td>다짐 후 <b>30mm</b> · 침하 2~3mm 예상해 조절</td><td class="l">KCS 44 70 05 3.3(2)</td></tr>
+        <tr><td class="l">보도 기울기(법령)</td><td><b>1/20(5.00%)</b> 이하</td><td class="l"><b>장애인등편의법 시행규칙 [별표2] 1.나.(3)</b></td></tr>
+        <tr><td class="l">접근로 기울기(법령)</td><td><b>1/18</b> 이하, 지형상 곤란 시 <b>1/12</b>까지 완화</td><td class="l"><b>같은 규칙 [별표1] 1.나.(1)</b></td></tr>
+        <tr><td class="l">단차(법령)</td><td>주접근로·횡단보도 <b>2cm</b> 이하</td><td class="l">[별표1] 1.나.(2) / [별표2] 1.바.(1)</td></tr>
+        <tr><td class="l">블록 포장(법령)</td><td>「<b>이음새의 틈이 벌어지지 아니하도록</b> 하고, <b>면이 평탄하게</b> 시공」</td><td class="l">[별표1] 1.라.(2) / [별표2] 1.라.(2)</td></tr>
+        <tr><td class="l">보도 횡단경사(상한)</td><td><b>1/25(4%)</b>↓, 교통약자 고려 1/50(2%) 권장</td><td class="l">국토부 보도 설치 및 관리 지침 (지침 — 법령 아님)</td></tr>
       </table>
+      <div class="tiny" style="margin-top:8px">⚠ <b>평탄성 10mm 에는 «측정 방법»이 표에 없습니다.</b> 3m 직선자 방법은
+        KCS 44 50 05(보조기층·기층 마무리)와 LH 41740 에서 쓰는 방법을 준용한 것입니다.
+        공사시방서에 측정 방법이 정해져 있으면 그것이 우선합니다.</div>
     </div>
   </div>
 
@@ -855,7 +877,7 @@ details ul{padding-left:18px;margin:7px 0}
     <div class="src">— LH 전문시방서 41740 3.7 현장품질관리</div></div>
     <p><b>측정 절차</b> — ① 3m 직선자를 측선 위에 놓는다 ② 자와 노면 사이 <b>최대 간극</b>을 틈새게이지로 읽는다(자 양단 750mm는 제외, 중앙 1,500mm 구간이 판정 구간) ③ 자를 3m 옮겨 반복 ④ 종단·횡단 두 방향 모두 실시.</p>
     <p><b>선행 확인</b> — 평탄성 불량은 대부분 마감이 아니라 <b>기초</b>에서 옵니다. 원지반 다짐 90%↑, 보조기층 다짐 95%↑, 모래층 3cm 균일 포설, 평면진동기 3회 이상 다짐(41740 3.3~3.6)이 지켜졌는지를 먼저 봅니다. 모래층을 밟고 다닌 자리는 반드시 국부 침하로 나타납니다.</p>
-    <p><b>기준값 선택</b> — 앱의 «10(시방)»은 LH 41740 값, «6(강화)»는 광장·주출입구 등 눈에 띄는 구간에 적용하는 사내 강화값입니다(일부 인터로킹 시방의 3m 곧은자 ±6mm 사례 준용). 어느 값을 썼는지 기록에 남습니다.</p>
+    <p><b>기준값 선택</b> — 앱의 «10(시방)»은 <b>KCS 44 70 05 표 3.1-2</b>의 값(LH 41740 도 같은 값), «6(강화)»는 광장·주출입구 등 눈에 띄는 구간에 적용하는 <b>사내 강화값</b>입니다(민간 인터로킹 시방의 「3m 곧은 자 요철 ±6mm 미만」 사례 준용). 어느 값을 썼는지 기록에 남습니다.</p>
   </details>
 
   <details>
@@ -883,7 +905,10 @@ details ul{padding-left:18px;margin:7px 0}
   <details>
     <summary>6. 근거 문헌</summary>
     <ul>
-      <li>LH(대한주택공사) 전문시방서 <b>41740 보차도용 콘크리트 인터로킹블록 포장</b> — 1.5.2 구배 / 3.4 블록 포설 / 3.6 표면다짐 / 3.7 현장품질관리(허용오차)</li>
+      <li><b>KCS 44 70 05 시멘트 콘크리트 블록포장</b>(국가건설기준·도로공사) — <b>3.4.1(9) 표 3.1-2 블록포장의 시공 허용오차</b>(평탄성 10mm·경사 ±0.4%·고저차 ±2mm·계획고 ±20mm) / 3.4.2 블록깔기(실줄·블록 간격 2~3mm) / 3.3 안정층 / 3.5 줄눈모래</li>
+      <li><b>KCS 34 60 15 친환경블록포장</b>(국가건설기준·<b>조경공사</b>) — 조경 블록포장의 정본 코드. 서울시 <b>SMCS 34 60 15</b>는 이를 그대로 인용합니다(조경포장 계열: 34 60 05 조경포장공통 / 34 60 10 친환경흙포장 / 34 60 20 조경일체형포장 / 34 60 25 조경포장경계).</li>
+      <li><b>장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙</b> [별표1](접근로) · [별표2](도로) — 기울기·단차·「이음새의 틈이 벌어지지 아니하도록」. <b>법령이므로 시방서보다 위입니다.</b></li>
+      <li>LH(대한주택공사) 전문시방서 <b>41740 보차도용 콘크리트 인터로킹블록 포장</b> — 1.5.2 구배 / 3.4 블록 포설 / 3.6 표면다짐 / 3.7 현장품질관리(허용오차). <b>기관 시방서</b>이며 수치는 KCS 44 70 05 표 3.1-2 와 같습니다.</li>
       <li>국토교통부 <b>보도 설치 및 관리 지침</b> — 보도 횡단경사 1/25(권장 1/50), 종단경사 1/18(완화 1/12·30m마다 참)</li>
       <li><b>도로의 구조·시설 기준에 관한 규칙</b> — 보도 횡단경사</li>
       <li><b>KS F 4419</b> 보차도용 콘크리트 인터로킹 블록 — 자재 치수·휨강도·흡수율·유색층 두께</li>
@@ -2550,14 +2575,25 @@ function fx(v,n){return (Math.round(v*Math.pow(10,n))/Math.pow(10,n)).toFixed(n)
 /* ══════════════════════════════════════════════
    기준값 (단일 원천)
 ══════════════════════════════════════════════ */
+/* ⚠근거는 «국가건설기준»이 위, 기관 시방서(LH·서울시 SMCS)가 아래다.
+   시공 허용오차 네 항목은 KCS 44 70 05 3.4.1(9) 표 3.1-2 한 표에 다 있다.
+   조경 계열 블록포장의 코드는 KCS 34 60 15 「친환경블록포장」이다. */
 var STD={
-  jointWidth:{std:2,max:3,src:"LH 41740 3.4 다"},
-  jointLine:{tol:3,src:"사내 제안(41740 3.4 마 정량화)"},
-  slopeTol:{pm:0.4,src:"LH 41740 3.7.1 나"},
+  /* KCS 44 70 05 (3.4.2(2)) 「블록의 간격은 2mm~3mm 이내로 유지」 — 하한이 있다.
+     조경·LH 계열은 2~3mm 기준에 5mm 초과 금지로 폭이 조금 넓다. */
+  jointWidth:{min:2,std:2,max:3,hard:5,src:"KCS 44 70 05 3.4.2(2)"},
+  /* 수치 기준은 시방에 없다. 다만 KCS 44 70 05 (3.4.2(1))이 「실줄에 따라 깔아야
+     한다」고 요구하므로, 기준선 자체는 시방이 정한 것이다. ±3mm 는 그 정량화. */
+  jointLine:{tol:3,src:"사내 제안 — KCS 44 70 05 3.4.2(1) 실줄 요구의 정량화"},
+  slopeTol:{pm:0.4,src:"KCS 44 70 05 표 3.1-2"},
   crossDesign:2.0, crossMax:4.0, crossRec:2.0,
-  longMax:5.56, longRelax:8.33, trailMax:12.0,
-  flat:{std:10,strict:6,src:"LH 41740 3.7.1 가"},
-  step:{max:2,src:"LH 41740 3.7.1 다"}
+  /* 편의법 시행규칙 [별표2] 1.나.(3) 보도의 기울기 20분의 1(5.0%) 이하 — 법령이다.
+     [별표1] 1.나.(1) 접근로 1/18, 지형상 곤란하면 1/12까지 완화. */
+  walkMax:5.0, longMax:5.56, longRelax:8.33, trailMax:12.0,
+  flat:{std:10,strict:6,src:"KCS 44 70 05 표 3.1-2"},
+  step:{max:2,src:"KCS 44 70 05 표 3.1-2"},
+  level:{pm:20,src:"KCS 44 70 05 표 3.1-2"},     /* 계획고 — 레벨 측량 몫 */
+  sand:{thick:30,src:"KCS 44 70 05 3.3(2) 다짐 후 30mm"}
 };
 
 /* ══════════════════════════════════════════════
@@ -3066,19 +3102,28 @@ $("#jResult").onclick=function(){
     var wmin=Math.min.apply(null,ws);
     var sd=Math.sqrt(ws.reduce(function(a,b){return a+(b-wavg)*(b-wavg);},0)/ws.length);
     var over2=ws.filter(function(v){return v>tol2;}).length;
-    if(wmax<=tol2 && wavg<=STD.jointWidth.std+0.5) grade="합격";
-    else if(wmax<=tol2*1.5 && over2/ws.length<=0.2) grade="조건부";
+    /* ★KCS 44 70 05 (3.4.2(2))는 「2mm~3mm 이내로 유지」다 — 하한이 있다.
+       좁은 줄눈은 줄눈모래가 안 들어가 블록끼리 하중을 못 나눈다(맞물림이 깨진다).
+       v2.0 까지는 상한만 보아, 0.5mm 로 붙여 깐 것도 «합격»이 나왔다. */
+    var lo2=STD.jointWidth.min;
+    var under2=ws.filter(function(v){return v<lo2;}).length;
+    if(wmax<=tol2 && wavg<=STD.jointWidth.std+0.5 && !under2) grade="합격";
+    else if(wmax<=tol2*1.5 && over2/ws.length<=0.2 && under2/ws.length<=0.2) grade="조건부";
     else grade="불량";
-    html='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 폭 '+fx(wmax,1)+'mm / 허용 '+tol2+'mm (표준 2mm)</div></div>'+
+    html='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+
+      (under2? '좁은 줄눈 '+under2+'개소 (하한 '+lo2+'mm) · ':'')+
+      '최대 폭 '+fx(wmax,1)+'mm / 허용 '+lo2+'~'+tol2+'mm</div></div>'+
       '<div class="kv"><span>측정 개소</span><b>'+ws.length+'개소</b></div>'+
       '<div class="kv"><span>평균 폭</span><b>'+fx(wavg,2)+' mm</b></div>'+
       '<div class="kv"><span>최소 ~ 최대</span><b>'+fx(wmin,1)+' ~ '+fx(wmax,1)+' mm</b></div>'+
       '<div class="kv"><span>표준편차(균일도)</span><b>'+fx(sd,2)+' mm</b></div>'+
-      '<div class="kv"><span>허용 초과</span><b>'+over2+'개소</b></div>'+
+      '<div class="kv"><span>허용 초과(넓음)</span><b>'+over2+'개소</b></div>'+
+      '<div class="kv"><span>하한 미달(좁음)</span><b>'+under2+'개소'+
+        (under2? ' — 줄눈모래가 안 들어갑니다':'')+'</b></div>'+
       sparkHtml(ws,tol2);
     rec={tool:"줄눈 폭",pos:$("#jPos").value||DB.site.loc,grade:grade,
-      main:fx(wavg,2)+"mm(평균)",std:"표준 2mm / 상한 "+tol2+"mm",
-      detail:"개소 "+ws.length+" / 최대 "+fx(wmax,1)+"mm / σ "+fx(sd,2)+"mm",
+      main:fx(wavg,2)+"mm(평균)",std:lo2+"~"+tol2+"mm (KCS 44 70 05)",
+      detail:"개소 "+ws.length+" / 최대 "+fx(wmax,1)+"mm / 좁음 "+under2+"개소 / σ "+fx(sd,2)+"mm",
       photo:JM.snapshot(880)};
   }
   html+='<img class="thumb" src="'+rec.photo+'" alt="측정 결과 이미지" />';
@@ -3218,13 +3263,28 @@ function lvJudge(p,sd){
   var caps=[],capNg=false;
   if(kind==="cross"){
     caps.push(["보도 횡단경사 상한 1/25 (4.00%)",ap<=STD.crossMax]);
-    caps.push(["교통약자 권장 1/50 (2.00%)",ap<=STD.crossRec]);
+    /* ⚠이건 «권장»이지 상한이 아니다 — 못 지켰다고 등급을 내리면 안 된다
+       (설계 2%가 정상인 현장이 2.1%로 조건부가 되어 버렸다). */
+    caps.push(["교통약자 권장 1/50 (2.00%)",ap<=STD.crossRec,true]);
     if(ap>STD.crossMax) capNg=true;
   }else{
-    caps.push(["보도 종단경사 1/18 (5.56%)",ap<=STD.longMax]);
-    caps.push(["부득이한 경우 1/12 (8.33%)",ap<=STD.longRelax]);
+    /* ★법령이 먼저다 — 편의법 시행규칙 [별표2] 1.나.(3) 보도의 기울기 1/20 이하.
+       국토부 지침의 1/18 보다 엄하다. v2.0 까지는 1/18 만 보아 이 줄을 놓쳤다. */
+    caps.push(["보도 기울기 1/20 (5.00%) — 편의법 [별표2]",ap<=STD.walkMax]);
+    caps.push(["접근로 1/18 (5.56%) — 편의법 [별표1]",ap<=STD.longMax]);
+    caps.push(["지형상 곤란 시 1/12 (8.33%)까지 완화",ap<=STD.longRelax]);
     caps.push(["산책로 최대 12%",ap<=STD.trailMax]);
     if(ap>STD.longRelax) capNg=true;
+  }
+  /* ★법령 선을 넘었는데 「합격」이 나오면 안 된다. 다만 법령 스스로
+     「지형상 곤란한 경우 1/12까지 완화」를 두었으므로 곧바로 불량도 아니다.
+     → 상한을 하나라도 넘겼으면 최소 «조건부»로 내리고, 완화 한계를 넘으면 불량.
+     v2.0 까지는 5.3%(보도 1/20 초과)가 그대로 «합격»으로 나왔다. */
+  var capOver=caps.filter(function(c){return !c[1]&&!c[2];}).length;
+  if(capNg) grade="불량";
+  else if(capOver && grade==="합격"){
+    grade="조건부";
+    caps.push(["※ 상한 초과 "+capOver+"건 — 설계도서에서 «지형상 곤란»에 해당하는지 확인", false]);
   }
   if(capNg) grade="불량";
   var html='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">측정 '+fx(ap,2)+'% / '+(hasD? '설계 '+fx(Math.abs(design),2)+'% (허용 ±'+tol+'%)':'설계구배 미입력 — 상한 기준만 판정')+'</div></div>'+
@@ -4078,13 +4138,13 @@ function aQuad(){ return AM.pts.quad.map(function(p){return [p.x,p.y];}); }
    한 자리의 네 항목이 따로 놀 이유도 없다.
 ══════════════════════════════════════════════════════════════ */
 var SPOT={on:false, kind:"flat", items:{}};
-var SPNAME={slope:"경사", flat:"평탄성", step:"단차", joint:"줄눈"};
+var SPNAME={slope:"경사", flat:"평탄성", step:"단차", joint:"줄눈", level:"계획고"};
 
 function spTitle(){ var v=($("#spName").value||"").trim(); return v||"측점"; }
 
 function renderSpot(){
   var h="", n=0, worst="합격";
-  ["slope","flat","step","joint"].forEach(function(k){
+  ["slope","flat","step","joint","level"].forEach(function(k){
     var r=SPOT.items[k];
     if(r){
       n++;
@@ -4099,7 +4159,7 @@ function renderSpot(){
   $("#spSum").innerHTML= n
     ? '<div style="height:9px"></div><div class="vd '+vdCls(worst)+'">'+
       '<div class="v1">이 측점 '+worst+'</div><div class="v2">'+spTitle()+' · 잰 항목 '+n+'개'+
-      (n<4? ' (나머지는 안 재도 저장됩니다)':'')+'</div></div>'
+      (n<5? ' (나머지는 안 재도 저장됩니다)':'')+'</div></div>'
     : '<div class="tiny" style="margin-top:8px">아직 잰 것이 없습니다. 위에서 경사를 재거나 사진을 넣으십시오.</div>';
 }
 
@@ -4116,7 +4176,7 @@ function spNextName(nm){
 }
 
 $("#spSave").onclick=function(){
-  var ks=["joint","flat","step","slope"].filter(function(k){return SPOT.items[k];});
+  var ks=["joint","flat","step","slope","level"].filter(function(k){return SPOT.items[k];});
   if(!ks.length){ toast("아직 잰 것이 없습니다"); return; }
   var nm=spTitle();
   ks.forEach(function(k){
@@ -4134,6 +4194,19 @@ $("#spClear").onclick=function(){
   SPOT.items={}; SPOT.on=false; $("#spMsg").innerHTML=""; renderSpot();
 };
 $("#spSlope").onclick=function(){ SPOT.on=true; go("slope"); };
+$("#spLevOk").onclick=function(){
+  var v=parseFloat($("#spLev").value);
+  if(isNaN(v)){ toast("레벨로 잰 계획고 차를 mm로 넣으십시오"); return; }
+  var t=Math.abs(parseFloat($("#spLevTol").value)||STD.level.pm);
+  var a=Math.abs(v);
+  /* 경계값은 유보한다 — 레벨 읽기 오차가 몇 mm 는 된다 */
+  var g = a<=t*0.9 ? "합격" : (a<=t ? "조건부" : "불량");
+  SPOT.on=true;
+  spPut("level",{tool:"계획고(레벨)",pos:spTitle(),grade:g,
+    main:(v>0?"+":"")+fx(v,0)+"mm", std:"±"+t+"mm",
+    detail:"수준측량 입력값 · 근거 "+STD.level.src+(g==="조건부"? " · 허용 경계라 재확인 권장":""),
+    photo:""});
+};
 $$(".spkind").forEach(function(b){ b.onclick=function(){
   $$(".spkind").forEach(function(x){x.classList.remove("on");});
   b.classList.add("on"); SPOT.kind=b.dataset.k;
