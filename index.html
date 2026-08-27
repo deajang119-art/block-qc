@@ -4379,6 +4379,99 @@ function spOpenSide(S){
   aPhase();
 }
 renderChk(); renderSpot();
+/* ══════════════════════════════════════════════════════════════
+   점자블록 = 법이 크기를 못박은 «300mm 자»
+   --------------------------------------------------------------
+   장애인등편의법 시행규칙 [별표1] 「점자블록의 크기는 0.3m × 0.3m 인 것을
+   표준형으로 하며, 그 높이는 바닥재의 높이와 동일하게 하여야 한다.」
+   ⚠평면 판독의 축척은 「구획 = 장수 × (블록치수+줄눈)」에서 나온다. 그래서
+     그 축척으로 블록 치수를 재면 언제나 입력값이 그대로 나온다(순환).
+     사진 안의 점자블록만이 그 고리 밖에 있는 «법정 길이»다.
+     장수를 한 칸 잘못 세면 모든 mm 가 조용히 틀어지는데, 이걸로 잡힌다.
+══════════════════════════════════════════════════════════════ */
+function aTactile(rect){
+  try{
+    if(!AM.img) return null;
+    var H0=rect.H0||rect.H;
+    var h=BlockScan.homography([[0,0],[rect.wmm,0],[rect.wmm,rect.hmm],[0,rect.hmm]],aQuad());
+    var src=aSrcCanvas(), sw=src.width, sh=src.height;
+    var sd=src.getContext("2d",{willReadFrequently:true}).getImageData(0,0,sw,sh).data;
+    /* 펴진 mm 격자를 5mm 씩 훑어 노란 자리를 표시한다.
+       ★구획 «밖»까지 넓혀 본다 — 점자블록은 대개 횡단보도·출입구 쪽이라
+         재는 구획 바로 앞뒤에 있지 그 안에 있지 않다. 지면은 한 평면이므로
+         호모그래피는 구획 밖에서도 성립한다(다만 멀어질수록 오차가 커진다). */
+    var st=5;
+    var mx0=-0.25*rect.wmm, my0=-0.8*rect.hmm;
+    var spanX=1.5*rect.wmm, spanY=2.6*rect.hmm;
+    var NX=Math.floor(spanX/st), NY=Math.floor(spanY/st);
+    if(NX<10||NY<10) return null;
+    var mask=new Uint8Array(NX*NY), yel=0, x, y;
+    for(y=0;y<NY;y++) for(x=0;x<NX;x++){
+      var p=BlockScan.applyH(h,mx0+(x+0.5)*st,my0+(y+0.5)*st);
+      var px=Math.round(p[0]), py=Math.round(p[1]);
+      if(px<0||py<0||px>=sw||py>=sh) continue;
+      var o=(py*sw+px)*4, R=sd[o], G=sd[o+1], B=sd[o+2];
+      var mx=Math.max(R,G,B), mn=Math.min(R,G,B);
+      if(mx<60) continue;
+      var s=(mx-mn)/mx;
+      /* 노랑 = 빨강·초록이 높고 파랑이 낮다. 회색 포장과 확실히 갈린다.
+         ⚠사진 가장자리에 닿은 자리는 «잘렸을 수 있다»고 따로 표시한다 —
+           잘린 점자블록은 짧게 읽혀 「축척 틀림」이 헛되이 뜬다(합성 시험에서
+           화면 아래로 잘린 300mm 가 185mm 로 읽혔다). */
+      if(s>0.28 && R>B+35 && G>B+25 && mx===Math.max(R,G)){
+        mask[y*NX+x] = (px<4||py<4||px>=sw-4||py>=sh-4) ? 2 : 1;
+        yel++;
+      }
+    }
+    if(yel<40) return {found:false, why:"노란 점자블록이 안 보입니다"};
+    /* 이어진 덩어리로 묶는다(4이웃) */
+    var seen=new Uint8Array(NX*NY), boxes=[], qx=new Int32Array(NX*NY), qy=new Int32Array(NX*NY);
+    for(y=0;y<NY;y++) for(x=0;x<NX;x++){
+      if(!mask[y*NX+x]||seen[y*NX+x]) continue;
+      var qi=0,qn=0; qx[qn]=x; qy[qn]=y; qn++; seen[y*NX+x]=1;
+      var x0=x,x1=x,y0=y,y1=y,area=0,edge=0;
+      while(qi<qn){
+        var cx=qx[qi], cy=qy[qi]; qi++; area++;
+        if(mask[cy*NX+cx]===2) edge++;
+        if(cx<x0)x0=cx; if(cx>x1)x1=cx; if(cy<y0)y0=cy; if(cy>y1)y1=cy;
+        var nb=[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
+        for(var k=0;k<4;k++){
+          var ax=nb[k][0], ay=nb[k][1];
+          if(ax<0||ay<0||ax>=NX||ay>=NY) continue;
+          if(!mask[ay*NX+ax]||seen[ay*NX+ax]) continue;
+          seen[ay*NX+ax]=1; qx[qn]=ax; qy[qn]=ay; qn++;
+        }
+      }
+      var wmm=(x1-x0+1)*st, hmm2=(y1-y0+1)*st;
+      if(area*st*st < 150*150) continue;               // 점자블록 한 장보다 작으면 버린다
+      var cxm=mx0+(x0+x1)/2*st, cym=my0+(y0+y1)/2*st;
+      var insideQ = cxm>=0&&cxm<=rect.wmm&&cym>=0&&cym<=rect.hmm;
+      boxes.push({w:wmm, h:hmm2, area:area*st*st, x:cxm, y:cym,
+                  inside:insideQ, clipped:edge>area*0.02,
+                  fill:area*st*st/(wmm*hmm2)});
+    }
+    if(!boxes.length) return {found:false, why:"노란 덩어리가 점자블록만 하지 않습니다"};
+    boxes.sort(function(a,b){return b.area-a.area;});
+    var b=boxes[0];
+    if(b.clipped)
+      return {found:false, clipped:true,
+              why:"점자블록이 사진 가장자리에 잘렸습니다 — 잘린 채로는 짧게 읽혀 축척을 못 봅니다. 한 장이 통째로 들어오게 찍어 주십시오"};
+    /* ★두 축을 «따로» 재야 한다. 장수를 가로로 한 칸 잘못 세면 가로 축척만
+       틀어지는데, 짧은 변만 보면 그게 세로 변이라 아무 일도 안 일어난다
+       (합성 시험: nc 를 ±1 해도 짧은 변은 285mm 그대로였다). */
+    var one=Math.min(b.w,b.h);
+    var nX=Math.max(1,Math.round(b.w/Math.max(one,1)));
+    var nY=Math.max(1,Math.round(b.h/Math.max(one,1)));
+    var sizeX=b.w/nX, sizeY=b.h/nY;
+    var errX=(sizeX/300-1)*100, errY=(sizeY/300-1)*100;
+    var err=Math.abs(errX)>Math.abs(errY)? errX : errY;
+    return {found:true, one:one, long:Math.max(b.w,b.h), n:Math.max(nX,nY),
+            sizeX:sizeX, sizeY:sizeY, errX:errX, errY:errY,
+            boxes:boxes.length, fill:b.fill,
+            inside:b.inside, err:err, at:{x:b.x,y:b.y}};
+  }catch(e){ return {found:false, why:"점자블록 판독 오류: "+e.message}; }
+}
+
 /* 펴진 mm 좌표 → 원본 사진 좌표 (검출 지점을 화면에 되돌려 그리기 위함) */
 function aBack(rect){
   var H0=rect.H0||rect.H;
@@ -4424,6 +4517,8 @@ function aReadPlan(){
   // 줄눈이 4화소보다 얇게 찍히면 폭은 못 믿는다 — 실측 2.0mm 가 3.5mm 로 읽혔다
   var wOK = worstMm <= J/3;   // 폭만은 여전히 해상도가 필요하다
   var back=aBack(rect), rows=[], marks=[], inverted=false;
+  /* ①② 재는 김에 같이 나오는 것 — 줄눈이 벌어지는 «자리»와 블록 낱장 편차 */
+  var pitchInfo=[], flare=[];
   function run(axis){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
     var acr   = axis==="h" ? H : W;      // 줄눈이 늘어서는 방향
@@ -4433,6 +4528,27 @@ function aReadPlan(){
     var js=BlockScan.scanJoints(rect,{pitch:acr+J, first:(acr+J)-J/2, count:cnt,
       axis:axis, step:Math.max(6,along/10)});
     var segLen=Math.min(span, seg*along+(seg-1)*J);
+    /* ★줄눈 중심의 «실제» 자리(평균)로 이웃 간격을 잰다.
+       ⚠이 간격의 평균은 축척이 정해 놓은 값이라 절대값이 못 된다 — 산포만 본다. */
+    (function(){
+      var cen=js.map(function(jt){
+        var ok=jt.pts.filter(function(q){return q.ok;});
+        if(ok.length<3) return null;
+        return ok.reduce(function(a,q){return a+q.d;},0)/ok.length;
+      });
+      var pit=[];
+      for(var t=1;t<cen.length;t++)
+        if(cen[t]!=null&&cen[t-1]!=null) pit.push({i:t, v:cen[t]-cen[t-1]});
+      if(pit.length>=2){
+        var vs=pit.map(function(q){return q.v;});
+        var m=vs.reduce(function(a,b){return a+b;},0)/vs.length;
+        var sd=Math.sqrt(vs.reduce(function(a,b){return a+(b-m)*(b-m);},0)/vs.length);
+        var wo=vs.map(function(v,k){return {d:v-m, i:pit[k].i};})
+                 .sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d);})[0];
+        pitchInfo.push({dir:axis==="h"?"세로":"가로", nominal:(axis==="h"?H:W)+J,
+                        n:vs.length, avg:m, sd:sd, worst:wo});
+      }
+    })();
     js.forEach(function(jt,i){
       jt.pts.forEach(function(q){
         if(!q.ok) return;
@@ -4463,6 +4579,21 @@ function aReadPlan(){
       if(jt.pol===-1) inverted=true;
       var segs=BlockScan.straightness(jt,{segLenMm:segLen, spanMm:span, tol:tol});
       var wd=BlockScan.widths(jt);
+      /* ★줄눈이 «어디서» 벌어지는가 — 경사 변곡점에서 넓어진다(서울시 매뉴얼 3.6.10).
+         폭을 스테이션 위치에 대해 직선으로 맞춰 기울기와 가장 넓은 자리를 남긴다. */
+      (function(){
+        var ps=jt.pts.filter(function(q){return q.ok&&q.wg!=null;});
+        if(ps.length<5) return;
+        var sm=0,wm=0,t;
+        for(t=0;t<ps.length;t++){ sm+=ps[t].s; wm+=ps[t].wg; }
+        sm/=ps.length; wm/=ps.length;
+        var sxx=0,sxy=0;
+        for(t=0;t<ps.length;t++){ var a=ps[t].s-sm, b=ps[t].wg-wm; sxx+=a*a; sxy+=a*b; }
+        var slope = sxx>1e-9 ? sxy/sxx : 0;          // mm 폭 / mm 거리
+        var top=ps.slice().sort(function(a,b){return b.wg-a.wg;})[0];
+        flare.push({dir:axis==="h"?"가로":"세로", no:i+1,
+                    slope1m:slope*1000, at:top.s, wmax:top.wg-2*cham, avg:wm-2*cham});
+      })();
       segs.forEach(function(r,k){
         if(r.skip) return;
         rows.push({dir:axis==="h"?"가로":"세로", no:i+1, seg:k+1, nseg:segs.length,
@@ -4479,6 +4610,7 @@ function aReadPlan(){
   if(!rows.length){ toast("줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요"); return; }
   AM.auto=marks; AM.draw();
   aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
+    pitchInfo:pitchInfo, flare:flare, tac:aTactile(rect),
     geoBad:geoBad, appR:appR, claimR:claimR,
     persp:persp, worstMm:worstMm, perspBad:perspBad, resBad:resBad,
     rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
@@ -4502,6 +4634,71 @@ function aReadSide(){
         dir:aKind==="flat"?(aDir==="cross"?"횡단":"종단"):null,
         mm:rect.mmPerPxSrc, mmCross:rect.mmPerPxCross};
   aRender();
+}
+
+/* 자 없이 같이 나오는 것 세 가지 — 실측 대체 1단계 */
+function aExtraHtml(){
+  var h="";
+  /* ③ 점자블록 자 —— 축척 교차검증. 가장 먼저 보여 준다(다른 값의 뿌리라서) */
+  var t=aRes.tac;
+  if(t&&t.found){
+    var ae=Math.abs(t.err);
+    /* ⚠구획 밖은 원근을 늘려 잰 값이라 그만큼 무디다 — 합성 시험에서 구획 바로
+       앞에 둔 점자블록이 −5% 로 읽혔다(축척은 맞는데도). 문턱을 자리에 맞춘다. */
+    var lim = t.inside? [3,8] : [8,18];
+    var g = ae<=lim[0] ? "합격" : (ae<=lim[1] ? "조건부" : "불량");
+    h+='<div class="ih" style="margin-top:12px">🟨 점자블록으로 축척 확인</div>'+
+       '<div class="vd '+vdCls(g)+'"><div class="v1">'+
+       (g==="합격"?"축척 맞음":(g==="조건부"?"축척 의심":"축척 틀림"))+'</div>'+
+       '<div class="v2">점자블록 한 장이 <b>가로 '+fx(t.sizeX,0)+' × 세로 '+fx(t.sizeY,0)+'mm</b>로 읽힙니다 / '+
+       '법정 표준 300×300mm — 차이 가로 '+(t.errX>0?"+":"")+fx(t.errX,1)+'% · 세로 '+
+       (t.errY>0?"+":"")+fx(t.errY,1)+'%</div></div>'+
+       '<div class="kv"><span>근거</span><b class="stdtag">편의법 시행규칙 [별표1] 2.(3) 0.3m×0.3m 표준형</b></div>'+
+       '<div class="kv"><span>노란 띠</span><b>'+fx(t.long,0)+'mm · 약 '+t.n+'장</b></div>'+
+       '<div class="kv"><span>자리</span><b>'+(t.inside? "구획 안":"구획 밖(가까이 늘려 본 자리)")+'</b></div>';
+    if(!t.inside)
+      h+='<div class="tiny" style="margin-top:6px;opacity:.8">점자블록이 구획 밖에 있어 <b>원근을 늘려 잰 값</b>입니다. '+
+         '더 정확히 보려면 <b>구획을 점자블록까지 끌어 넓혀</b> 다시 판독하십시오.</div>';
+    if(g!=="합격")
+      h+='<div class="warnbox">점자블록이 300mm 로 안 읽힙니다 — <b>'+
+         (Math.abs(t.errX)>Math.abs(t.errY)? "가로(가로 장수)":"세로(세로 장수)")+
+         ' 쪽</b>이 어긋납니다. <b>장수를 한 칸 잘못 세었거나 블록 규격이 다를 수 있습니다</b>. '+
+         '고쳐서 «다시 판독»하십시오 — 이 값이 틀리면 <b>아래 mm 가 모두 같은 비율로 틀립니다</b>.</div>';
+    else
+      h+='<div class="tiny" style="margin-top:6px">✔ 사진 안의 <b>법정 300mm</b> 물건과 앱의 축척이 맞습니다 — 아래 mm 값을 믿어도 됩니다.</div>';
+  }else if(t&&t.why){
+    h+='<div class="tiny" style="margin-top:12px;opacity:.7">🟨 축척 확인 — '+t.why+
+       ' (점자블록이 화면에 들어오면 <b>법정 300mm</b>로 축척을 검증합니다)</div>';
+  }
+  /* ② 블록 낱장 편차 */
+  if(aRes.pitchInfo&&aRes.pitchInfo.length){
+    h+='<div class="ih" style="margin-top:12px">📐 블록 낱장 편차</div>'+
+       '<div class="tiny" style="margin-bottom:6px">⚠사진의 축척이 블록 치수에서 나오므로 <b>실치수의 절대값은 못 잽니다</b>. '+
+       '같은 무더기 안에서 <b>낱장이 얼마나 다른가</b>만 잽니다 — 참고 기준 ±2mm(서울시 매뉴얼 표 2.2.5).</div>';
+    var wild=aRes.pitchInfo.filter(function(p){return p.sd>3;});
+    if(wild.length)
+      h+='<div class="warnbox">줄눈 간격이 <b>σ '+fx(wild[0].sd,1)+'mm</b> 로 널뜁니다. '+
+         '블록이 그렇게 제각각일 수는 없으니 <b>격자를 잘못 잡았을 가능성</b>이 큽니다 — '+
+         '<b>장수·블록 규격</b>을 확인하고 다시 판독하십시오.</div>';
+    aRes.pitchInfo.forEach(function(p){
+      var bad=p.sd>2;
+      h+='<div class="kv"><span>'+p.dir+' 간격 산포</span><b>σ '+fx(p.sd,2)+'mm · 가장 벗어난 칸 '+
+         (p.worst.d>0?"+":"")+fx(p.worst.d,1)+'mm ('+p.worst.i+'번째)'+
+         (bad? ' <span class="badge b-cau">고름 나쁨</span>':'')+'</b></div>';
+    });
+  }
+  /* ① 줄눈 벌어짐 자리 */
+  if(aRes.flare&&aRes.flare.length){
+    var f=aRes.flare.slice().sort(function(a,b){return Math.abs(b.slope1m)-Math.abs(a.slope1m);})[0];
+    var w=aRes.flare.slice().sort(function(a,b){return b.wmax-a.wmax;})[0];
+    h+='<div class="ih" style="margin-top:12px">↔️ 줄눈이 벌어지는 자리</div>'+
+       '<div class="kv"><span>가장 넓은 곳</span><b>'+fx(w.wmax,1)+'mm · '+w.dir+' '+w.no+'번 줄눈, 시작점에서 '+fx(w.at,0)+'mm</b></div>'+
+       '<div class="kv"><span>벌어지는 기울기</span><b>1m 갈 때 '+(f.slope1m>0?"+":"")+fx(f.slope1m,2)+'mm ('+f.dir+' '+f.no+'번)</b></div>';
+    if(Math.abs(f.slope1m)>0.8)
+      h+='<div class="warnbox">한쪽으로 <b>줄눈이 계속 벌어집니다</b>. 경사 변곡점에서 잘 생깁니다 — '+
+         '기층 다짐 때부터 완만한 곡선으로 처리하고 변곡점에는 소정방형 블록을 쓰십시오(서울시 매뉴얼 3.6.10).</div>';
+  }
+  return h;
 }
 
 function aRender(){
@@ -4609,6 +4806,7 @@ function aRender(){
              "구간 "+fx(aRes.skip,0)+"~"+fx(aRes.L-aRes.skip,0)+"mm / 측점 "+r.n+"개 / 최대 위치 "+fx(r.at,0)+"mm",
       photo:AM.snapshot(880)};
   }
+  if(aRes.kind==="plan") html+=aExtraHtml();
   html+='<img class="thumb" src="'+aRes.rec.photo+'" alt="판독 결과" />';
   html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="aSave">'+
         (SPOT.on? "📍 이 측점에 넣기":"기록 저장")+

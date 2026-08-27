@@ -71,6 +71,24 @@
         x.lineTo(p3[0], p3[1]); x.lineTo(p4[0], p4[1]); x.closePath(); x.fill();
       }
     }
+    /* ★점자블록 — 법이 크기를 못박은 300×300mm. 사진 안의 «법정 자»가 된다.
+       (편의법 시행규칙 [별표1] 2.(3) 「0.3m × 0.3m 인 것을 표준형으로」) */
+    if (o.tactile) {
+      /* ⚠구획은 언제나 «가까운 띠»에 잡힌다. 점자블록을 세계좌표 Z 로 직접
+         찍어 넣을 수 있어야 구획 안에 들어가게 놓을 수 있다. */
+      var tn = o.tactile.n || 4;
+      var tz = o.tactile.Z != null ? o.tactile.Z : Z0 + (o.tactile.atRow || 8) * pz;
+      var tsize = o.tactile.size || 300, tgap = 3;
+      var tx0 = X0 + (o.nx * px - (tn * tsize + (tn - 1) * tgap)) / 2;
+      x.fillStyle = "#e8c11a";
+      for (var tk = 0; tk < tn; tk++) {
+        var TX = tx0 + tk * (tsize + tgap);
+        var a1 = cam.fwd(TX, tz), a2 = cam.fwd(TX + tsize, tz),
+            a3 = cam.fwd(TX + tsize, tz + tsize), a4 = cam.fwd(TX, tz + tsize);
+        x.beginPath(); x.moveTo(a1[0], a1[1]); x.lineTo(a2[0], a2[1]);
+        x.lineTo(a3[0], a3[1]); x.lineTo(a4[0], a4[1]); x.closePath(); x.fill();
+      }
+    }
     var im = x.getImageData(0, 0, IW, IH), D = im.data;
     for (var t = 0; t < D.length; t += 4) {
       var n = (rnd() - 0.5) * (o.noise == null ? 14 : o.noise);
@@ -379,6 +397,67 @@
              pass: grabbed && loupeSeen && moved > 3 && panned < 0.01 && snapD < 1 };
   }
 
+  /* ★점자블록 자(尺) 시험 —— 축척을 «사진 밖 기준»으로 검증할 수 있는가.
+     장수를 한 칸 잘못 세면 모든 mm 가 조용히 틀어지는데, 그게 잡혀야 한다. */
+  async function tacCheck(name, opt, ncShift) {
+    /* ①먼저 점자블록 없이 찍어 구획이 «세계 어디»에 잡히는지 본 뒤,
+       ②그 한가운데에 점자블록을 놓고 다시 찍는다.
+       (구획은 늘 가까운 띠에 잡히므로 아무 데나 놓으면 구획 밖으로 나간다) */
+    var o = Object.assign({}, opt || {});
+    var probe = make(Object.assign({}, o, { tactile: null }));
+    var pim = await load(probe.url);
+    root.AM.img = pim; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = probe.o.bw;
+    document.querySelector("#aBh").value = probe.o.bh;
+    document.querySelector("#aBj").value = probe.o.jt;
+    root.uF35 = probe.o.f35;
+    var Q0 = root.aFindQuad(pim);
+    if (!Q0.ok) return { name: name, ok: false, why: "구획 못 잡음: " + Q0.why };
+    var zs = Q0.quad.map(function (q) { return probe.cam.back(q.x, q.y)[1]; });
+    /* 점자블록은 대개 재는 구획 «바로 앞»(횡단보도 쪽)에 있다 —
+       구획 근단보다 조금 더 가까이(작은 Z) 놓는다. */
+    var znear = Math.min.apply(null, zs);
+    /* ⚠화면 아래로 잘리면 짧게 읽힌다 — 보이는 가장 가까운 지면보다 뒤에 놓는다 */
+    var zEdge = probe.cam.back(probe.o.IW / 2, probe.o.IH - 2)[1];
+    var zmid = (opt && opt.inQuad)
+      ? (znear + Math.max.apply(null, zs)) / 2 - 150
+      : Math.max(zEdge + 60, znear - 320);
+    o.tactile = Object.assign({ n: 3 }, (opt && opt.tactile) || {}, { Z: zmid });
+    var S = make(o), im = await load(S.url);
+    root.AM.img = im; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = S.o.bw;
+    document.querySelector("#aBh").value = S.o.bh;
+    document.querySelector("#aBj").value = S.o.jt;
+    document.querySelector("#aTol").value = 3;
+    document.querySelector("#aSeg").value = 10;
+    document.querySelector("#aCham").value = 0;
+    root.uF35 = S.o.f35;
+    root.aMode = "plan"; root.aPat = S.o.bond === "run" ? "run" : "stack";
+    var P = root.aFindQuad(im);
+    if (!P.ok) return { name: name, ok: false, why: P.why };
+    root.AM.pts.quad = P.quad.map(function (q) { return { x: q.x, y: q.y }; });
+    var nc = P.nc + (ncShift || 0), nr = P.nr;
+    document.querySelector("#aNc").value = nc;
+    document.querySelector("#aNr").value = nr;
+    try { root.aReadPlan(); } catch (e) { return { name: name, ok: false, why: "판독 오류 " + e.message }; }
+    var R = root.aRes;
+    if (!R) return { name: name, ok: false, why: "판독 결과 없음" };
+    var t = R.tac || {};
+    var want = ncShift ? Math.abs((nc / P.nc) - 1) * 100 : 0;
+    return { name: name, ok: true, 장수: nc + "x" + nr + (ncShift ? " (일부러 " + ncShift + ")" : ""),
+             점자블록찾음: !!t.found, why: t.why || "",
+             한장mm: t.found ? (+t.sizeX.toFixed(0)) + "x" + (+t.sizeY.toFixed(0)) : null,
+             오차X: t.found ? +t.errX.toFixed(1) : null,
+             오차Y: t.found ? +t.errY.toFixed(1) : null,
+             축척오차퍼센트: t.found ? +t.err.toFixed(1) : null,
+             기대오차퍼센트: +want.toFixed(1),
+             간격산포: (R.pitchInfo || []).map(function (q) { return q.dir + " σ" + q.sd.toFixed(2); }).join(" · "),
+             벌어짐: (R.flare || []).length ? "있음(" + R.flare.length + "줄눈)" : "없음",
+             구획안: !!t.inside,
+             /* 구획 밖은 원근을 늘려 잰 값이라 ±8% 까지는 「맞음」으로 본다 */
+             pass: t.found && (ncShift ? Math.abs(t.err) > 8 : Math.abs(t.err) <= 8) };
+  }
+
   async function runMM() {
     var out = [];
     for (var i = 0; i < CASES.length; i++) {
@@ -391,5 +470,5 @@
   root.BLKTEST = { run: run, runMM: runMM, one: one, mmCheck: mmCheck, drag: drag,
                    make: make, load: load, CASES: CASES,
                    sideMake: sideMake, sideCheck: sideCheck, runSide: runSide, SIDE: SIDE,
-                   classifyCheck: classifyCheck };
+                   classifyCheck: classifyCheck, tacCheck: tacCheck };
 })(typeof window !== "undefined" ? window : globalThis);

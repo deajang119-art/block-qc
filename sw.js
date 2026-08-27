@@ -1,5 +1,5 @@
 /* 블록포장 품질검측 서비스워커 — 오프라인 캐시 */
-var CACHE = "blkqc-v2.2.0";
+var CACHE = "blkqc-v2.3.0";
 var FILES = ["./", "./index.html", "./manifest.json",
              "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
