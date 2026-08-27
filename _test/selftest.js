@@ -732,6 +732,36 @@
              pass: !!(R.sag3m && tg3 && Math.abs(R.sag3m.max - tg3.max) <= Math.max(3, R.acc + 2)) };
   }
 
+  /* ★현장 실사진 —— 황토색 인터로킹(2026-08-27 첫 시험).
+     이 사진에서 「포장이 9%뿐」이 나와 격자를 못 찾았다. 유색 포장 회귀 시험. */
+  async function fieldCheck() {
+    var im = await load("_test/field1.jpg?" + Date.now());
+    root.AM.img = im; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = 200;
+    document.querySelector("#aBh").value = 100;
+    document.querySelector("#aBj").value = 3;
+    root.uF35 = null; root.aMode = "plan"; root.aPat = "run";
+    var full = root.uCanvasData(im, Math.min(im.width, 2600));
+    var work = root.uCanvasData(im, Math.min(1400, im.width));
+    var R = root.BlockAuto.analyze(full, work,
+      { blockW: 200, blockH: 100, joint: 3, f35: null, frac: 0.75 });
+    var P = root.aFindQuad(im);
+    var tac = null;
+    if (P.ok) {
+      root.AM.pts.quad = P.quad.map(function (q) { return { x: q.x, y: q.y }; });
+      var rect = root.BlockScan.rectify(root.aSrcCanvas(), root.aQuad(),
+        P.nc * 200 + (P.nc - 1) * 3, P.nr * 100 + (P.nr - 1) * 3, { maxPx: 8e6 });
+      tac = root.aTactile(rect);
+    }
+    return { name: "현장 실사진(황토색)",
+             포장비율: R.pav != null ? +(R.pav * 100).toFixed(0) : null,
+             격자: R.ok ? "찾음" : R.why,
+             구획: P.ok ? P.nc + "x" + P.nr : P.why,
+             점자블록오검출: !!(tac && tac.found),
+             /* 유색 포장을 포장으로 보고(80%↑), 점자블록을 헛보지 않아야 한다 */
+             pass: !!(R.pav > 0.8 && R.ok && P.ok && !(tac && tac.found)) };
+  }
+
   async function runMM() {
     var out = [];
     for (var i = 0; i < CASES.length; i++) {
@@ -745,6 +775,7 @@
                    make: make, load: load, CASES: CASES,
                    sideMake: sideMake, sideCheck: sideCheck, runSide: runSide, SIDE: SIDE,
                    classifyCheck: classifyCheck, tacCheck: tacCheck, edgeCheck: edgeCheck,
-                   profCheck: profCheck, stitchCheck: stitchCheck, shotAt: shotAt,
+                   profCheck: profCheck, fieldCheck: fieldCheck,
+                   stitchCheck: stitchCheck, shotAt: shotAt,
                    stitchShots: stitchShots, longSurf: longSurf };
 })(typeof window !== "undefined" ? window : globalThis);
