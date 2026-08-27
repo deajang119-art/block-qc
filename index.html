@@ -260,76 +260,59 @@ details ul{padding-left:18px;margin:7px 0}
 
 <!-- ══════════ 측점 검측 (v2.0 주 화면) ══════════ -->
 <section id="v-spot" class="hide">
-  <div class="card">
-    <h3>📍 측점 검측</h3>
-    <div class="note">한 자리에 3m 직선자를 놓고 <b>경사 · 평탄성 · 단차 · 줄눈</b>을 한 묶음으로 봅니다.
-      사진은 <b>종류를 고르지 마십시오</b> — 자가 찍힌 <b>측면</b>인지 위에서 본 <b>평면</b>인지 앱이 가립니다.</div>
-    <div style="height:10px"></div>
-    <div class="grid2">
-      <div><label class="lab">측점 이름</label><input type="text" id="spName" placeholder="A-1" value="A-1" /></div>
-      <div><label class="lab">줄눈 허용 편차(mm)</label><input type="number" id="spTol" step="0.5" value="3" /></div>
-    </div>
-    <div style="height:8px"></div>
-    <div class="grid3">
-      <div><label class="lab">블록 가로(mm)</label><input type="number" id="spBw" value="200" /></div>
-      <div><label class="lab">블록 세로(mm)</label><input type="number" id="spBh" value="100" /></div>
-      <div><label class="lab">줄눈 목표(mm)</label><input type="number" id="spBj" step="0.5" value="2" /></div>
-    </div>
-  </div>
 
+  <!-- ═══ ① 잰다 — 이 화면에서 사람이 하는 일은 사실 이것 하나다 ═══ -->
   <div class="card">
-    <h3>① 자 위에 폰을 올린다 — 경사</h3>
-    <div class="tiny">사진에는 <b>중력이 안 담깁니다.</b> 경사만은 폰 센서로 재야 합니다.
-      <b>자는 없어도 됩니다</b> — 폰을 블록 위에 엎어 놓고 <b>3~5곳</b>에서 재어 비슷하면 그 값입니다.</div>
-    <div style="height:9px"></div>
-    <button class="btn sec" id="spSlope">🫧 경사 재러 가기</button>
-  </div>
-
-  <div class="card">
-    <h3>② 사진을 넣는다</h3>
-    <div class="tiny">자를 <b>옆에서</b> 한 장(평탄성·단차) · 자를 치우고 <b>위에서</b> 한 장(줄눈).
-      <b>순서는 상관없습니다.</b> 넣으면 앱이 무엇인지 가려서 알맞은 칸을 채웁니다.</div>
-    <div style="height:9px"></div>
-    <label class="lab">자를 옆에서 찍은 사진은 무엇을 재나</label>
-    <div class="btnrow">
-      <button class="btn sec spkind on" data-k="flat">평탄성(3m 직선자)</button>
-      <button class="btn sec spkind" data-k="step">단차(짧은 자)</button>
+    <div class="row" style="gap:10px">
+      <div style="flex:0 0 auto;font-size:13.5px;font-weight:700;color:#9DC3E6">📍 측점</div>
+      <div style="flex:1"><input type="text" id="spName" placeholder="A-1" value="A-1" /></div>
     </div>
-    <div style="height:9px"></div>
+
+    <div style="height:11px"></div>
     <div class="btnrow">
       <button class="btn" id="spShot">📷 촬영</button>
-      <button class="btn sec" id="spPick">🖼 앨범에서 선택</button>
+      <button class="btn sec" id="spPick">🖼 앨범</button>
     </div>
+    <div class="tiny" style="margin-top:7px">자를 <b>옆에서</b> 한 장 · 자를 치우고 <b>위에서</b> 한 장.
+      <b>순서도 종류도 고르지 마십시오</b> — 앱이 가려서 알맞은 칸을 채웁니다.</div>
+
+    <div style="height:11px"></div>
+    <label class="lab">옆에서 찍은 사진은 무엇을 재나</label>
+    <div class="btnrow">
+      <button class="btn sec spkind on" data-k="flat">평탄성 · 3m 자</button>
+      <button class="btn sec spkind" data-k="step">단차 · 짧은 자</button>
+    </div>
+
+    <div style="height:11px"></div>
+    <button class="btn sec" id="spSlope">🫧 경사 재기 — 폰을 엎어 놓는다</button>
+    <div class="tiny" style="margin-top:6px">사진에는 <b>중력이 안 담깁니다.</b> 경사만은 폰 센서로 <b>3~5곳</b> 재어
+      비슷하면 그 값입니다. <b>자는 없어도 됩니다.</b></div>
+
     <div class="small" id="spMsg" style="margin-top:9px"></div>
   </div>
 
-  <div class="card">
-    <h3>③ 눈으로 보는 확인사항</h3>
-    <div class="tiny">서울시 「보도공사 설계시공 매뉴얼(ver 2.0)」의 <b>시공시 확인사항</b> 그대로입니다.
-      재는 것 말고 <b>보고 판단하는</b> 항목이라 앱이 대신 못 합니다 — 현장에서 눌러 두면 기록에 남습니다.</div>
-    <div style="height:9px"></div>
-    <div id="spChk"></div>
-    <div class="tiny" style="margin-top:8px">💡 줄눈 모래충진은 <b>송곳으로 찔러 들어가지 않아야</b> 합니다
-      (매뉴얼 4.2.2(5)⑧). 단차는 <b>경계석·가로수분과 블록 사이</b>를 봅니다 — 2mm 이상이면 재시공입니다.</div>
-  </div>
-
-  <div class="card">
-    <h3>④ 레벨로 잰 값 — 계획고</h3>
-    <div class="tiny">사진으로는 <b>높이의 절대값</b>을 못 냅니다. 레벨(수준측량)로 잰 <b>계획고와의 차</b>를
-      넣으면 함께 판정합니다. <b>기준이 갈립니다</b> — KCS 44 70 05 표 3.1-2은 <b>±20mm</b>,
-      서울시 투수블록 기준 4.1.2(2)는 「받침안정층, 블록 <b>±2mm</b>」(기층 ±15mm)로 <b>10배</b> 차이입니다.
-      <b>공사시방서에 따라 골라 넣으십시오.</b></div>
-    <div style="height:9px"></div>
+  <!-- 규격 — 찍기 «전에» 맞춰야 하는 것이라 사진 바로 밑에 둔다 -->
+  <details id="dSpec">
+    <summary>⚙ 블록 규격 · 허용값 <span class="stdtag" id="sumSpecTag">— 200×100mm · 줄눈 2±3mm</span></summary>
+    <div class="tiny" style="margin:8px 0">기본값은 <b>보도용 200×100</b>입니다. 300각·점토블록 등 다른 규격이면
+      <b>찍기 전에</b> 고치십시오 — 사진의 축척이 이 값에서 나옵니다.
+      현장정보에 규격을 적어 두면 이 칸이 자동으로 채워집니다.</div>
     <div class="grid2">
-      <div><label class="lab">계획고 차(mm)</label><input type="number" id="spLev" step="1" placeholder="예: -8 (낮으면 음수)" /></div>
-      <div><label class="lab">허용(±mm)</label><input type="number" id="spLevTol" value="20" /></div>
+      <div><label class="lab">블록 가로(mm)</label><input type="number" id="spBw" value="200" /></div>
+      <div><label class="lab">블록 세로(mm)</label><input type="number" id="spBh" value="100" /></div>
     </div>
-    <div style="height:9px"></div>
-    <button class="btn sec" id="spLevOk">계획고 판정 넣기</button>
-  </div>
+    <div style="height:8px"></div>
+    <div class="grid2">
+      <div><label class="lab">줄눈 목표(mm)</label><input type="number" id="spBj" step="0.5" value="2" /></div>
+      <div><label class="lab">줄눈 허용 편차(mm)</label><input type="number" id="spTol" step="0.5" value="3" /></div>
+    </div>
+    <div class="tiny" style="margin-top:8px">⚠ 줄눈 폭은 <b>블록 종류로 갈립니다</b> — 일반 2~3mm ·
+      틈새확대형 4~7mm · 결합틈새형 2~5mm (KCS 44 70 05).</div>
+  </details>
 
-  <div class="card">
-    <h3>⑤ 이 측점 판정</h3>
+  <!-- ═══ ② 판정 ═══ -->
+  <div class="card" id="spVerdict">
+    <h3>📊 이 측점 판정</h3>
     <div id="spItems"></div>
     <div id="spSum"></div>
     <div class="btnrow" style="margin-top:10px">
@@ -337,6 +320,31 @@ details ul{padding-left:18px;margin:7px 0}
       <button class="btn gray" id="spClear">비우고 새 측점</button>
     </div>
   </div>
+
+  <!-- ═══ ③ 필요할 때만 펴는 것 둘 ═══ -->
+  <details id="dChk">
+    <summary>👀 눈으로 보는 확인사항 <span class="stdtag" id="sumChkTag">— 아직 안 봄</span></summary>
+    <div class="tiny" style="margin:8px 0">서울시 「보도공사 설계시공 매뉴얼(ver 2.0)」의 <b>시공시 확인사항</b> 그대로입니다.
+      재는 것이 아니라 <b>보고 판단하는</b> 항목이라 앱이 대신 못 합니다 — 현장에서 눌러 두면 기록에 남습니다.</div>
+    <div id="spChk"></div>
+    <div class="tiny" style="margin-top:8px">💡 줄눈 모래충진은 <b>송곳으로 찔러 들어가지 않아야</b> 합니다
+      (매뉴얼 4.2.2(5)⑧). 단차는 <b>경계석·가로수분과 블록 사이</b>를 봅니다 — 2mm 이상이면 재시공입니다.</div>
+  </details>
+
+  <details id="dLev">
+    <summary>📐 레벨로 잰 계획고 넣기 <span class="stdtag" id="sumLevTag">— 안 넣음</span></summary>
+    <div class="tiny" style="margin:8px 0">사진으로는 <b>높이의 절대값</b>을 못 냅니다. 레벨(수준측량)로 잰
+      <b>계획고와의 차</b>를 넣으면 함께 판정합니다.<br>
+      <b>기준이 갈립니다</b> — KCS 44 70 05 표 3.1-2은 <b>±20mm</b>, 서울시 투수블록 기준 4.1.2(2)는
+      「받침안정층·블록 <b>±2mm</b>」(기층 ±15mm)로 <b>10배</b> 차이입니다. <b>공사시방서에 따라 골라 넣으십시오.</b></div>
+    <div class="grid2">
+      <div><label class="lab">계획고 차(mm)</label><input type="number" id="spLev" step="1" placeholder="예: -8 (낮으면 음수)" /></div>
+      <div><label class="lab">허용(±mm)</label><input type="number" id="spLevTol" value="20" /></div>
+    </div>
+    <div style="height:9px"></div>
+    <button class="btn sec" id="spLevOk">계획고 판정 넣기</button>
+  </details>
+
   <input id="spFile" type="file" accept="image/*" style="display:none" />
 </section>
 
@@ -2711,7 +2719,7 @@ function tagSite(){
 $("#sSave").onclick=function(){
   DB.site={name:$("#sName").value.trim(),loc:$("#sLoc").value.trim(),date:$("#sDate").value,
     who:$("#sWho").value.trim(),type:$("#sType").value,spec:$("#sSpec").value.trim(),memo:$("#sMemo").value.trim()};
-  save(); tagSite(); go("home");
+  save(); tagSite(); specFromSite(); go("home");
 };
 function renderHome(){
   var s=DB.site;
@@ -4285,6 +4293,28 @@ var SPNAME={slope:"경사", flat:"평탄성", step:"단차", joint:"줄눈", lev
 
 function spTitle(){ var v=($("#spName").value||"").trim(); return v||"측점"; }
 
+/* ── 접은 칸은 안 보이면 없는 것이 된다.
+      펴 보지 않아도 속을 알도록 제목 옆에 한 줄로 적어 둔다. ── */
+function spSpecTag(){
+  var e=$("#sumSpecTag"); if(!e) return;
+  var bw=$("#spBw").value||"?", bh=$("#spBh").value||"?",
+      bj=$("#spBj").value||"?", tl=$("#spTol").value||"?";
+  e.textContent="— "+bw+"×"+bh+"mm · 줄눈 "+bj+"±"+tl+"mm";
+}
+function spChkTag(){
+  var e=$("#sumChkTag"); if(!e) return;
+  var n=0,ng=0;
+  if(SPOT.chk) SPCHK.forEach(function(c,i){ var v=SPOT.chk[i]; if(v){ n++; if(v==="ng") ng++; } });
+  e.textContent = n? ("— "+n+"/"+SPCHK.length+" 봤음"+(ng? " · 고쳐야 "+ng:"")) : "— 아직 안 봄";
+  e.style.color = ng? "#FF9C93" : "";
+}
+function spLevTag(){
+  var e=$("#sumLevTag"); if(!e) return;
+  var r=SPOT.items.level;
+  e.textContent = r? ("— "+r.main+" · "+r.grade) : "— 안 넣음";
+  e.style.color = (r&&r.grade==="불량")? "#FF9C93" : "";
+}
+
 function renderSpot(){
   var h="", n=0, worst="합격";
   var cr=chkRec();
@@ -4300,6 +4330,7 @@ function renderSpot(){
        (r? '<span class="badge '+gradeCls(r.grade)+'">'+r.grade+'</span> '+r.main
          : '<span style="opacity:.5">아직</span>')+'</b></div>';
   });
+  spLevTag(); spChkTag();
   $("#spItems").innerHTML=h;
   $("#spSum").innerHTML= n
     ? '<div style="height:9px"></div><div class="vd '+vdCls(worst)+'">'+
@@ -4313,6 +4344,11 @@ function spPut(slot,rec){
   SPOT.items[slot]=rec;
   toast("📍 "+SPNAME[slot]+"을(를) 측점에 넣었습니다");
   go("spot");
+  /* ★판정 칸까지 데려다 준다 — go() 가 맨 위로 올려버리기 때문에 */
+  setTimeout(function(){
+    var e=$("#spVerdict");
+    if(e&&e.scrollIntoView) try{ e.scrollIntoView({behavior:"smooth",block:"start"}); }catch(err){ e.scrollIntoView(); }
+  },80);
 }
 
 function spNextName(nm){
@@ -4364,6 +4400,7 @@ function renderChk(){
        '<b style="white-space:nowrap">'+(on==="ok"?"좋음":(on==="ng"?"고쳐야":"—"))+'</b></div>';
   });
   $("#spChk").innerHTML=h;
+  spChkTag();
   $$("#spChk [data-chk]").forEach(function(el){
     el.onclick=function(){
       var i=+el.dataset.chk;
@@ -4399,6 +4436,20 @@ $("#spLevOk").onclick=function(){
     detail:"수준측량 입력값 · 근거 "+STD.level.src+(g==="조건부"? " · 허용 경계라 재확인 권장":""),
     photo:""});
 };
+["#spBw","#spBh","#spBj","#spTol"].forEach(function(sel){
+  var el=$(sel); if(el) el.oninput=spSpecTag;
+});
+
+/* 현장정보의 「블록 규격」(예 200×100×60) 을 측점 규격칸으로 옮긴다.
+   같은 값을 두 군데 적게 하는 것이 헷갈림의 절반이었다. */
+function specFromSite(){
+  var t=(DB.site&&DB.site.spec)||"";
+  var m=String(t).match(/(\d{2,4})\s*[x×*ｘ✕]\s*(\d{2,4})/i);
+  if(!m) return false;
+  $("#spBw").value=m[1]; $("#spBh").value=m[2];
+  spSpecTag(); return true;
+}
+
 $$(".spkind").forEach(function(b){ b.onclick=function(){
   $$(".spkind").forEach(function(x){x.classList.remove("on");});
   b.classList.add("on"); SPOT.kind=b.dataset.k;
@@ -4506,7 +4557,7 @@ function spOpenSide(S){
   }
   aPhase();
 }
-renderChk(); renderSpot();
+specFromSite(); spSpecTag(); renderChk(); renderSpot();
 /* ══════════════════════════════════════════════════════════════
    점자블록 = 법이 크기를 못박은 «300mm 자»
    --------------------------------------------------------------
