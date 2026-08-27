@@ -71,6 +71,27 @@
         x.lineTo(p3[0], p3[1]); x.lineTo(p4[0], p4[1]); x.closePath(); x.fill();
       }
     }
+    /* ★경계석 — 포장보다 «가까운» 쪽에 띠로 덮는다. 덮는 순간 그 경계에
+       자투리(조각블록)가 생기고, 경계석 낱개 사이 줄눈도 같이 그린다. */
+    if (o.curb) {
+      var cz = o.curb.Z, cw = o.curb.width || 250;
+      var cx0 = X0 - px, cx1 = X0 + (o.nx + 1) * px;
+      var q1 = cam.fwd(cx0, cz - cw), q2 = cam.fwd(cx1, cz - cw),
+          q3 = cam.fwd(cx1, cz), q4 = cam.fwd(cx0, cz);
+      x.fillStyle = "#c2bfb8";                                  // 경계석(밝은 화강석)
+      x.beginPath(); x.moveTo(q1[0], q1[1]); x.lineTo(q2[0], q2[1]);
+      x.lineTo(q3[0], q3[1]); x.lineTo(q4[0], q4[1]); x.closePath(); x.fill();
+      /* 경계석 낱개 사이 줄눈 — 기준 5~10mm(KCS 44 70 05 3.2(3)) */
+      var cjw = o.curb.jointW == null ? 8 : o.curb.jointW;
+      var cev = o.curb.jointEvery || 1000;
+      x.fillStyle = "#4a4744";
+      for (var CX = cx0 + cev; CX < cx1; CX += cev) {
+        var j1 = cam.fwd(CX, cz - cw), j2 = cam.fwd(CX + cjw, cz - cw),
+            j3 = cam.fwd(CX + cjw, cz), j4 = cam.fwd(CX, cz);
+        x.beginPath(); x.moveTo(j1[0], j1[1]); x.lineTo(j2[0], j2[1]);
+        x.lineTo(j3[0], j3[1]); x.lineTo(j4[0], j4[1]); x.closePath(); x.fill();
+      }
+    }
     /* ★점자블록 — 법이 크기를 못박은 300×300mm. 사진 안의 «법정 자»가 된다.
        (편의법 시행규칙 [별표1] 2.(3) 「0.3m × 0.3m 인 것을 표준형으로」) */
     if (o.tactile) {
@@ -458,6 +479,60 @@
              pass: t.found && (ncShift ? Math.abs(t.err) > 8 : Math.abs(t.err) <= 8) };
   }
 
+  /* ★경계석 선 하나로 셋을 재는가 —— 자투리 · 경계석 줄눈 · 점자블록 이격 */
+  async function edgeCheck(name, opt) {
+    opt = opt || {};
+    var probe = make({});
+    var pim = await load(probe.url);
+    root.AM.img = pim; root.AM.reset(); root.AM.fit();
+    document.querySelector("#aBw").value = probe.o.bw;
+    document.querySelector("#aBh").value = probe.o.bh;
+    document.querySelector("#aBj").value = probe.o.jt;
+    document.querySelector("#aTol").value = 3;
+    document.querySelector("#aSeg").value = 10;
+    document.querySelector("#aCham").value = 0;
+    root.uF35 = probe.o.f35; root.aMode = "plan"; root.aPat = "stack";
+    var Q0 = root.aFindQuad(pim);
+    if (!Q0.ok) return { name: name, ok: false, why: "구획 못 잡음: " + Q0.why };
+    var zs = Q0.quad.map(function (q) { return probe.cam.back(q.x, q.y)[1]; });
+    var znear = Math.min.apply(null, zs);
+    var pz = probe.o.bh + probe.o.jt, Z0 = probe.o.Z0, jt = probe.o.jt;
+    /* 줄눈 중심은 Z0 + k*pz - jt/2 에 있다. 경계석을 그 중 하나에서
+       「자투리」만큼 앞으로 물려 놓으면 참값이 정해진다. */
+    var want = opt.want == null ? 45 : opt.want;
+    var k = Math.round((znear - Z0) / pz) - 1;
+    var jointZ = Z0 + k * pz - jt / 2;
+    var cz = jointZ - want;                       // 경계석 안쪽 모서리
+    var o2 = Object.assign({}, opt.mk || {}, {
+      curb: { Z: cz, width: 250, jointW: opt.jointW == null ? 8 : opt.jointW, jointEvery: 900 },
+      tactile: { n: 3, Z: cz + (opt.gap == null ? 300 : opt.gap) }
+    });
+    var S = make(o2), im = await load(S.url);
+    root.AM.img = im; root.AM.reset(); root.AM.fit();
+    var P = root.aFindQuad(im);
+    if (!P.ok) return { name: name, ok: false, why: "구획 못 잡음(경계석 뒤): " + P.why };
+    root.AM.pts.quad = P.quad.map(function (q) { return { x: q.x, y: q.y }; });
+    document.querySelector("#aNc").value = P.nc;
+    document.querySelector("#aNr").value = P.nr;
+    /* 경계선 두 점 = 경계석 안쪽 모서리(참값)를 사진으로 옮긴 것 */
+    var e1 = S.cam.fwd(-700, cz), e2 = S.cam.fwd(700, cz);
+    root.AM.pts.pair = [{ x: e1[0], y: e1[1] }, { x: e2[0], y: e2[1] }];
+    try { root.aReadPlan(); } catch (err) { return { name: name, ok: false, why: "판독 오류 " + err.message }; }
+    var R = root.aRes, E = R && R.edge;
+    if (!E || E.why) return { name: name, ok: false, why: (E && E.why) || "경계선 결과 없음" };
+    var wantFace = want - jt / 2;
+    var gapT = opt.gap == null ? 300 : opt.gap;
+    var jw = opt.jointW == null ? 8 : opt.jointW;
+    return { name: name, ok: true,
+             자투리: +E.face.toFixed(0), 참자투리: +wantFace.toFixed(0),
+             경계석줄눈: E.curbJoint ? +E.curbJoint.med.toFixed(0) : null, 참줄눈: jw,
+             이격: E.tacGap != null ? +E.tacGap.toFixed(0) : null, 참이격: gapT,
+             구획밖: !!E.outside,
+             pass: Math.abs(E.face - wantFace) <= 8
+                && E.curbJoint != null && Math.abs(E.curbJoint.med - jw) <= 3
+                && E.tacGap != null && Math.abs(E.tacGap - gapT) <= 45 };
+  }
+
   async function runMM() {
     var out = [];
     for (var i = 0; i < CASES.length; i++) {
@@ -470,5 +545,5 @@
   root.BLKTEST = { run: run, runMM: runMM, one: one, mmCheck: mmCheck, drag: drag,
                    make: make, load: load, CASES: CASES,
                    sideMake: sideMake, sideCheck: sideCheck, runSide: runSide, SIDE: SIDE,
-                   classifyCheck: classifyCheck, tacCheck: tacCheck };
+                   classifyCheck: classifyCheck, tacCheck: tacCheck, edgeCheck: edgeCheck };
 })(typeof window !== "undefined" ? window : globalThis);

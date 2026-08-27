@@ -768,6 +768,13 @@ details ul{padding-left:18px;margin:7px 0}
       <button class="btn sec" id="aRevert">↺ 처음 제안대로</button>
     </div>
     <div style="height:7px"></div>
+    <div class="btnrow" id="aEdgeRow">
+      <button class="btn sec" id="aEdgeAdd">📏 경계석 선 놓기</button>
+      <button class="btn gray" id="aEdgeDel">경계선 지우기</button>
+    </div>
+    <div class="tiny" id="aEdgeTip" style="margin-top:6px">경계석 <b>안쪽 모서리</b>(포장과 닿는 선)에 보라색 두 점을 끌어 맞추면
+      <b>자투리 폭 · 경계석 줄눈 · 점자블록 이격</b>이 같이 나옵니다. 안 놓아도 판독은 됩니다.</div>
+    <div style="height:7px"></div>
     <div class="btnrow">
       <button class="btn gray" id="aAdd">⊕ 점 찍기</button>
       <button class="btn gray" id="aUndo">↩ 취소</button>
@@ -2704,7 +2711,7 @@ function Measure(cvId,wrapId,zoomId){
      현장 확인 결과에서 나온 것. 점은 앱이 먼저 찍고, 사람은 끌어서 맞춘다. */
   this.snapPts=[];          // 달라붙을 자리(줄눈 교점, 원본 사진 좌표)
   this.drag=null;           // 지금 끌고 있는 점 {role,i,dx,dy}
-  this.dragRoles=["quad"];  // 끌 수 있는 점 묶음
+  this.dragRoles=["quad","pair"];  // 끌 수 있는 점 묶음(구획 네 점 · 경계선 두 점)
   this.onchange=function(){};
   var pointers={},lastDist=0,lastMid=null,lastPt=null;
 
@@ -4145,6 +4152,34 @@ $("#aRevert").onclick=function(){
 };
 $("#aAdd").onclick=function(){ if(AM.pts.quad.length<4) AM.add("quad"); else toast("네 점을 이미 찍었습니다 — 끌어서 고치십시오"); };
 $("#aUndo").onclick=function(){ AM.undo(["quad"]); aPhase(); };
+/* ── 경계석 선 ──────────────────────────────────────────────
+   앱이 먼저 찾아 보고(긴 곧은 선), 못 찾으면 화면 아래쪽에 놓아 준다.
+   어느 쪽이든 사람이 끌어서 맞춘다. */
+$("#aEdgeAdd").onclick=function(){
+  if(!AM.img){ toast("사진을 먼저 고르십시오"); return; }
+  var W=AM.img.width, H=AM.img.height, put=null;
+  try{
+    var R=rLines(AM.img);
+    if(R&&R.lines&&R.lines.length){
+      /* 화면 아래쪽에 있고 가장 길게 뻗은 선을 경계석 후보로 본다 */
+      var best=null;
+      R.lines.forEach(function(L){
+        var span=L.xb-L.xa, y=L.at(R.W/2);
+        if(span<R.W*0.4) return;
+        var sc=span/R.W + y/R.H;                 // 길고 아래쪽일수록
+        if(!best||sc>best.sc) best={sc:sc,L:L};
+      });
+      if(best){
+        var k=R.scale, xa=best.L.xa*k, xb=best.L.xb*k;
+        put=[{x:xa, y:best.L.at(best.L.xa)*k},{x:xb, y:best.L.at(best.L.xb)*k}];
+      }
+    }
+  }catch(e){}
+  if(!put) put=[{x:W*0.12,y:H*0.88},{x:W*0.88,y:H*0.88}];
+  AM.pts.pair=put; AM.draw(); aPhase();
+  toast(put? "경계선을 놓았습니다 — 끌어서 경계석 안쪽 모서리에 맞추십시오":"");
+};
+$("#aEdgeDel").onclick=function(){ AM.pts.pair=[]; AM.draw(); aPhase(); };
 $("#aFit").onclick=function(){ AM.fit(); };
 $("#aRestart").onclick=function(){ aReset(); };
 
@@ -4447,6 +4482,7 @@ function aTactile(rect){
       var cxm=mx0+(x0+x1)/2*st, cym=my0+(y0+y1)/2*st;
       var insideQ = cxm>=0&&cxm<=rect.wmm&&cym>=0&&cym<=rect.hmm;
       boxes.push({w:wmm, h:hmm2, area:area*st*st, x:cxm, y:cym,
+                  x0:mx0+x0*st, x1:mx0+(x1+1)*st, y0:my0+y0*st, y1:my0+(y1+1)*st,
                   inside:insideQ, clipped:edge>area*0.02,
                   fill:area*st*st/(wmm*hmm2)});
     }
@@ -4467,9 +4503,116 @@ function aTactile(rect){
     var err=Math.abs(errX)>Math.abs(errY)? errX : errY;
     return {found:true, one:one, long:Math.max(b.w,b.h), n:Math.max(nX,nY),
             sizeX:sizeX, sizeY:sizeY, errX:errX, errY:errY,
-            boxes:boxes.length, fill:b.fill,
+            boxes:boxes.length, fill:b.fill, box:b,
             inside:b.inside, err:err, at:{x:b.x,y:b.y}};
   }catch(e){ return {found:false, why:"점자블록 판독 오류: "+e.message}; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   경계석 선 하나로 셋을 잰다
+   --------------------------------------------------------------
+   ① 자투리(조각블록) 폭 — 경계석과 마지막 온전한 블록 사이의 남은 폭
+      LH 41740 3.4 라 : 3cm 미만은 블록 대신 유색 모르타르, 3cm 이상은 커터 절단
+   ② 경계석 줄눈 5~10mm — KCS 44 70 05 3.2(3)
+   ③ 점자블록 이격 300mm — 편의법 [별표1](0.3m 전면, 필요시 0.3~0.9m)
+   ⚠경계석은 대개 구획 «밖»이다. 지면은 한 평면이라 호모그래피는 밖에서도
+     성립하지만, 멀어질수록 오차가 커진다 — 그 사실을 화면에 적는다.
+══════════════════════════════════════════════════════════════ */
+function aEdgeChecks(rect, tac){
+  try{
+    var P=AM.pts.pair;
+    if(!P||P.length<2) return null;
+    var mmRect=[[0,0],[rect.wmm,0],[rect.wmm,rect.hmm],[0,rect.hmm]];
+    var toMM=BlockScan.homography(aQuad(), mmRect);
+    var toIMG=BlockScan.homography(mmRect, aQuad());
+    var A=BlockScan.applyH(toMM,P[0].x,P[0].y), B=BlockScan.applyH(toMM,P[1].x,P[1].y);
+    var dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy);
+    if(!(L>80)) return {why:"경계선 두 점이 너무 가깝습니다"};
+    var ux=dx/L, uy=dy/L, nx=-uy, ny=ux;
+    /* 경계석은 구획 반대쪽에 있다 */
+    var sc=(rect.wmm/2-A[0])*nx+(rect.hmm/2-A[1])*ny;
+    var sgn = sc>0 ? -1 : 1;
+    var horiz=Math.abs(ux)>Math.abs(uy);
+    var out={horiz:horiz, len:L, outside:false};
+
+    /* ① 자투리 폭 —— 선과 직각 방향의 칸 간격으로 나머지를 본다 */
+    var bw=+$("#aBw").value||200, bh=+$("#aBh").value||100, J=+$("#aBj").value||2;
+    var pitch = horiz ? (bh+J) : (bw+J);
+    var pos = horiz ? (A[1]+B[1])/2 : (A[0]+B[0])/2;
+    var rem = pos - Math.round(pos/pitch)*pitch;
+    out.rem = Math.abs(rem);
+    out.face = Math.max(0, out.rem - J/2);        // 줄눈 중심 기준 → 블록 실폭
+    out.outside = (horiz ? (pos<0||pos>rect.hmm) : (pos<0||pos>rect.wmm));
+
+    /* 원본 사진에서 mm 자리의 밝기를 읽는다(구획 밖도 된다) */
+    var src=aSrcCanvas(), sw=src.width, sh=src.height;
+    var sd=src.getContext("2d",{willReadFrequently:true}).getImageData(0,0,sw,sh).data;
+    function gAt(xm,ym){
+      var p=BlockScan.applyH(toIMG,xm,ym);
+      var px=Math.round(p[0]), py=Math.round(p[1]);
+      if(px<0||py<0||px>=sw||py>=sh) return null;
+      var o=(py*sw+px)*4;
+      return 0.299*sd[o]+0.587*sd[o+1]+0.114*sd[o+2];
+    }
+
+    /* ② 경계석 줄눈 —— 선을 따라 경계석 쪽으로 조금 들어가 훑는다 */
+    var N=Math.floor(L), prof=new Float64Array(N), cn=new Int32Array(N), i, off;
+    for(off=25; off<=65; off+=10){
+      for(i=0;i<N;i++){
+        var v=gAt(A[0]+ux*i+sgn*nx*off, A[1]+uy*i+sgn*ny*off);
+        if(v!=null){ prof[i]+=v; cn[i]++; }
+      }
+    }
+    var vals=[];
+    for(i=0;i<N;i++){ if(cn[i]) { prof[i]/=cn[i]; vals.push(prof[i]); } else prof[i]=NaN; }
+    /* ⚠1mm 씩 문턱을 넘나드는 잡음이 «폭 1mm 줄눈»을 무더기로 만든다
+       (합성 시험에서 참 8mm 가 중앙값 1mm 로 읽혔다).
+       → ①3mm 이동평균으로 잡음을 죽이고 ②골이 «충분히 깊은» 곳만 고르고
+         ③폭은 세는 게 아니라 반높이 단면(readValley)으로 잰다. */
+    var sm=new Float64Array(N);
+    for(i=0;i<N;i++){
+      var a1=0,c1=0;
+      for(var q=-2;q<=2;q++){ var t=i+q; if(t<0||t>=N||!isFinite(prof[t])) continue; a1+=prof[t]; c1++; }
+      sm[i]= c1? a1/c1 : NaN;
+    }
+    if(vals.length>N*0.5){
+      var srt=vals.slice().sort(function(a,b){return a-b;});
+      var med=srt[srt.length>>1], p1=srt[Math.floor(srt.length*0.01)];
+      var depth=med-p1;
+      if(depth>6){
+        var thr=med-depth*0.45, gw=[], used=-99;
+        for(i=3;i<N-3;i++){
+          if(!isFinite(sm[i])||sm[i]>=thr) continue;
+          if(!(sm[i]<=sm[i-1]&&sm[i]<=sm[i+1])) continue;   // 국소 최저
+          if(i-used<8) continue;                            // 같은 줄눈 두 번 세지 않기
+          var w0=Math.max(0,i-20), w1=Math.min(N,i+21), win=[];
+          for(var t2=w0;t2<w1;t2++) win.push(isFinite(sm[t2])? sm[t2] : med);
+          var v=BlockScan.readValley(win);
+          if(!v) continue;
+          var wid = (v.wg!=null? v.wg : v.w);
+          if(!(wid>1&&wid<45)) continue;
+          gw.push(wid); used=i;
+        }
+        if(gw.length){
+          var gs=gw.slice().sort(function(a,b){return a-b;});
+          out.curbJoint={n:gw.length, med:gs[gs.length>>1],
+                         min:gs[0], max:gs[gs.length-1], depth:depth};
+        }
+      }
+    }
+
+    /* ③ 점자블록 이격 —— 경계선에서 점자블록 가장자리까지 */
+    if(tac&&tac.found&&tac.box){
+      var b=tac.box, cs=[[b.x0,b.y0],[b.x1,b.y0],[b.x1,b.y1],[b.x0,b.y1]];
+      var dmin=1e9;
+      cs.forEach(function(c){
+        var d=Math.abs((c[0]-A[0])*nx+(c[1]-A[1])*ny);
+        if(d<dmin) dmin=d;
+      });
+      out.tacGap=dmin;
+    }
+    return out;
+  }catch(e){ return {why:"경계선 판독 오류: "+e.message}; }
 }
 
 /* 펴진 mm 좌표 → 원본 사진 좌표 (검출 지점을 화면에 되돌려 그리기 위함) */
@@ -4610,12 +4753,15 @@ function aReadPlan(){
   if(!rows.length){ toast("줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요"); return; }
   AM.auto=marks; AM.draw();
   aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
-    pitchInfo:pitchInfo, flare:flare, tac:aTactile(rect),
+    pitchInfo:pitchInfo, flare:flare, tac:(function(){ aRes_tac=aTactile(rect); return aRes_tac; })(),
+    edge:null,
     geoBad:geoBad, appR:appR, claimR:claimR,
     persp:persp, worstMm:worstMm, perspBad:perspBad, resBad:resBad,
     rect:{W:rect.W,H:rect.H,pxmm:rect.pxmm,mm:rect.mmPerPxSrc}};
+  aRes.edge=aEdgeChecks(rect, aRes.tac);
   aRender();
 }
+var aRes_tac=null;
 
 function aReadSide(){
   var L=+$("#aRl").value||3000, T=+$("#aRt").value||50;
@@ -4669,6 +4815,47 @@ function aExtraHtml(){
   }else if(t&&t.why){
     h+='<div class="tiny" style="margin-top:12px;opacity:.7">🟨 축척 확인 — '+t.why+
        ' (점자블록이 화면에 들어오면 <b>법정 300mm</b>로 축척을 검증합니다)</div>';
+  }
+  /* 경계석 선으로 나오는 셋 */
+  var e=aRes.edge;
+  if(e&&!e.why){
+    h+='<div class="ih" style="margin-top:12px">📏 경계석 선으로 잰 것</div>';
+    if(e.outside)
+      h+='<div class="tiny" style="margin-bottom:6px;opacity:.8">경계석이 구획 밖이라 <b>원근을 늘려 잰 값</b>입니다. '+
+         '구획을 경계석까지 끌어 넓히면 더 정확해집니다.</div>';
+    /* ① 자투리(조각블록) */
+    var f=e.face;
+    var gf = f<3 ? "합격" : (f<30 ? "불량" : "조건부");
+    h+='<div class="kv"><span>자투리 폭(조각블록)</span><b>'+
+       '<span class="badge '+gradeCls(gf)+'">'+gf+'</span> '+fx(f,0)+'mm</b></div>';
+    if(f<3)
+      h+='<div class="tiny" style="margin:2px 0 6px">✔ 경계석에 온전한 블록이 딱 맞습니다 — 자투리가 없습니다.</div>';
+    else if(f<30)
+      h+='<div class="warnbox">자투리가 <b>'+fx(f,0)+'mm</b>입니다. <b>3cm 미만은 블록으로 채우면 안 됩니다</b> — '+
+         '유색 모르타르로 마감해야 합니다(LH 41740 3.4 라). 얇은 조각블록은 밟으면 깨집니다.</div>';
+    else
+      h+='<div class="tiny" style="margin:2px 0 6px">조각블록 구간입니다. <b>커터로 절단</b>해 마감하고(손으로 쪼개지 말 것), '+
+         '서울시 매뉴얼 시공시 확인사항 2)의 <b>「조각블록 사용 여부」</b>로 기록됩니다.</div>';
+    /* ② 경계석 줄눈 */
+    if(e.curbJoint){
+      var cj=e.curbJoint, gj=(cj.med>=5&&cj.med<=10)?"합격":((cj.med>=3&&cj.med<=14)?"조건부":"불량");
+      h+='<div class="kv"><span>경계석 줄눈</span><b><span class="badge '+gradeCls(gj)+'">'+gj+'</span> '+
+         '중앙값 '+fx(cj.med,0)+'mm ('+fx(cj.min,0)+'~'+fx(cj.max,0)+'mm · '+cj.n+'개소)</b></div>'+
+         '<div class="kv"><span>기준</span><b class="stdtag">KCS 44 70 05 3.2(3) 5~10mm · 1:2 줄눈 모르터</b></div>';
+    }else{
+      h+='<div class="kv"><span>경계석 줄눈</span><b style="opacity:.6">못 찾음 — 경계선을 경계석 위로 조금 옮겨 보십시오</b></div>';
+    }
+    /* ③ 점자블록 이격 */
+    if(e.tacGap!=null){
+      var d=e.tacGap;
+      var gd = Math.abs(d-300)<=30 ? "합격" : (d>300&&d<=900 ? "조건부" : "불량");
+      h+='<div class="kv"><span>점자블록 이격</span><b><span class="badge '+gradeCls(gd)+'">'+gd+'</span> '+fx(d,0)+'mm</b></div>'+
+         '<div class="kv"><span>기준</span><b class="stdtag">편의법 [별표1] 0.3m 전면(필요시 0.3~0.9m) · 서울시 확인사항 9)</b></div>';
+      if(gd==="조건부"&&d>330)
+        h+='<div class="tiny" style="margin:2px 0 6px">0.3m 를 넘습니다. <b>통행상 안전을 위하여 필요한 경우</b>에만 0.9m 까지 허용됩니다 — 설계도서를 확인하십시오.</div>';
+    }
+  }else if(e&&e.why){
+    h+='<div class="tiny" style="margin-top:12px;color:#F5A524">📏 경계선 — '+e.why+'</div>';
   }
   /* ② 블록 낱장 편차 */
   if(aRes.pitchInfo&&aRes.pitchInfo.length){
