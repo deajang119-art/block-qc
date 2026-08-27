@@ -167,12 +167,10 @@ details ul{padding-left:18px;margin:7px 0}
 
 <nav id="nav">
   <button data-v="home" class="on">홈</button>
-  <button data-v="joint">① 줄눈</button>
-  <button data-v="slope">② 경사</button>
-  <button data-v="flat">③ 평탄성·단차</button>
-  <button data-v="auto">④ 자동판독</button>
+  <button data-v="spot">📍 측점 검측</button>
   <button data-v="rec">기록</button>
   <button data-v="std">기준·근거</button>
+  <button data-v="tools">낱개 도구</button>
 </nav>
 
 <main>
@@ -188,34 +186,17 @@ details ul{padding-left:18px;margin:7px 0}
   </div>
 
   <div class="tiles">
-    <button class="tile" data-go="joint">
-      <div class="ic">📐</div>
-      <div class="tn">① 줄눈 검측</div>
-      <div class="td">줄눈선 통직도 · 줄눈 폭<br>사진 판독 방식</div>
-      <div class="ts">기준 폭 2mm / 통직 ±3mm</div>
+    <button class="tile" data-go="spot">
+      <div class="ic">📍</div>
+      <div class="tn">측점 검측</div>
+      <div class="td">한 자리에서 경사·평탄성·단차·줄눈<br>사진 종류는 앱이 가린다</div>
+      <div class="ts">여기서 시작하십시오</div>
     </button>
-    <button class="tile" data-go="slope">
-      <div class="ic">🫧</div>
-      <div class="tn">② 경사 검측</div>
-      <div class="td">스마트폰 물방울 수평계<br>횡단·종단 구배</div>
-      <div class="ts">설계구배 ±0.4%</div>
-    </button>
-    <button class="tile" data-go="flat">
-      <div class="ic">📏</div>
-      <div class="tn">③ 평탄성(FM)</div>
-      <div class="td">3m 직선자 평탄성 측정<br>750-1,500-750 이동</div>
-      <div class="ts">오목 깊이 10mm 이내</div>
-    </button>
-    <button class="tile" data-go="flat" data-sub="step">
-      <div class="ic">↕️</div>
-      <div class="tn">③-2 단차</div>
-      <div class="td">블록-블록 / 블록-경계석<br>고저차 측정</div>
-      <div class="ts">고저차 2mm 이내</div>
-    </button>
-    <button class="tile" data-go="auto">
-      <div class="ic">🔍</div>
-      <div class="tt">④ 사진 자동판독</div>
-      <div class="ts">구획만 잡으면 줄눈·틈을 스스로 훑는다</div>
+    <button class="tile" data-go="tools">
+      <div class="ic">🧰</div>
+      <div class="tn">낱개 도구</div>
+      <div class="td">한 가지만 재고 싶을 때<br>① 줄눈 ② 경사 ③ 평탄성 ④ 자동판독</div>
+      <div class="ts">기준은 측점 검측과 같다</div>
     </button>
     <button class="tile" data-go="rec">
       <div class="ic">🗂</div>
@@ -274,6 +255,76 @@ details ul{padding-left:18px;margin:7px 0}
     <input type="text" id="sMemo" placeholder="예: 맑음, 기온 21℃" />
     <div style="height:11px"></div>
     <button class="btn" id="sSave">저장</button>
+  </div>
+</section>
+
+<!-- ══════════ 측점 검측 (v2.0 주 화면) ══════════ -->
+<section id="v-spot" class="hide">
+  <div class="card">
+    <h3>📍 측점 검측</h3>
+    <div class="note">한 자리에 3m 직선자를 놓고 <b>경사 · 평탄성 · 단차 · 줄눈</b>을 한 묶음으로 봅니다.
+      사진은 <b>종류를 고르지 마십시오</b> — 자가 찍힌 <b>측면</b>인지 위에서 본 <b>평면</b>인지 앱이 가립니다.</div>
+    <div style="height:10px"></div>
+    <div class="grid2">
+      <div><label class="lab">측점 이름</label><input type="text" id="spName" placeholder="A-1" value="A-1" /></div>
+      <div><label class="lab">줄눈 허용 편차(mm)</label><input type="number" id="spTol" step="0.5" value="3" /></div>
+    </div>
+    <div style="height:8px"></div>
+    <div class="grid3">
+      <div><label class="lab">블록 가로(mm)</label><input type="number" id="spBw" value="200" /></div>
+      <div><label class="lab">블록 세로(mm)</label><input type="number" id="spBh" value="100" /></div>
+      <div><label class="lab">줄눈 목표(mm)</label><input type="number" id="spBj" step="0.5" value="2" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>① 자 위에 폰을 올린다 — 경사</h3>
+    <div class="tiny">사진에는 <b>중력이 안 담깁니다.</b> 경사만은 센서로 재야 합니다 — 노면에 직접 놓지 말고
+      <b>3m 자 위에</b> 올리십시오.</div>
+    <div style="height:9px"></div>
+    <button class="btn sec" id="spSlope">🫧 경사 재러 가기</button>
+  </div>
+
+  <div class="card">
+    <h3>② 사진을 넣는다</h3>
+    <div class="tiny">자를 <b>옆에서</b> 한 장(평탄성·단차) · 자를 치우고 <b>위에서</b> 한 장(줄눈).
+      <b>순서는 상관없습니다.</b> 넣으면 앱이 무엇인지 가려서 알맞은 칸을 채웁니다.</div>
+    <div style="height:9px"></div>
+    <label class="lab">자를 옆에서 찍은 사진은 무엇을 재나</label>
+    <div class="btnrow">
+      <button class="btn sec spkind on" data-k="flat">평탄성(3m 직선자)</button>
+      <button class="btn sec spkind" data-k="step">단차(짧은 자)</button>
+    </div>
+    <div style="height:9px"></div>
+    <div class="btnrow">
+      <button class="btn" id="spShot">📷 촬영</button>
+      <button class="btn sec" id="spPick">🖼 앨범에서 선택</button>
+    </div>
+    <div class="small" id="spMsg" style="margin-top:9px"></div>
+  </div>
+
+  <div class="card">
+    <h3>③ 이 측점 판정</h3>
+    <div id="spItems"></div>
+    <div id="spSum"></div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn" id="spSave">이 측점 저장</button>
+      <button class="btn gray" id="spClear">비우고 새 측점</button>
+    </div>
+  </div>
+  <input id="spFile" type="file" accept="image/*" style="display:none" />
+</section>
+
+<!-- ══════════ 낱개 도구 ══════════ -->
+<section id="v-tools" class="hide">
+  <div class="card">
+    <h3>🧰 낱개 도구</h3>
+    <div class="note">묶지 않고 한 가지만 재고 싶을 때 씁니다. 재는 방법과 기준은 「측점 검측」과 같습니다.</div>
+    <div style="height:12px"></div>
+    <button class="btn sec" data-go="joint" style="margin-bottom:9px">① 줄눈 — 사진에 점 찍어 재기</button>
+    <button class="btn sec" data-go="slope" style="margin-bottom:9px">② 경사 — 수평계</button>
+    <button class="btn sec" data-go="flat" style="margin-bottom:9px">③ 평탄성·단차 — 손입력 · 사진 간극</button>
+    <button class="btn sec" data-go="auto">④ 사진 자동판독 (평면 · 측면)</button>
   </div>
 </section>
 
@@ -919,6 +970,12 @@ details ul{padding-left:18px;margin:7px 0}
     function len(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
     var pxTop = (len(quad[0], quad[1]) + len(quad[3], quad[2])) / 2;
     var mmPerPx = wmm / Math.max(pxTop, 1);
+    /* ★가로와 세로의 해상도는 다르다. 자를 옆에서 찍으면 «자 길이 3,000mm»는
+       화면을 가로지르니 화소당 2mm 를 넘지만, 재는 것은 «자 밑 틈»이라
+       자 두께 50mm 쪽 해상도(화소당 1mm 안팎)가 진짜 기준이다.
+       긴 쪽 값으로 가리면 멀쩡한 사진을 「판정 유보」로 돌려보낸다. */
+    var pxSide = (len(quad[0], quad[3]) + len(quad[1], quad[2])) / 2;
+    var mmPerPxCross = hmm / Math.max(pxSide, 1);
     // 원본보다 1.5배쯤 촘촘히 펴면 부분픽셀 계산이 안정된다. 과하면 메모리만 먹는다
     var pxmm = opt.pxmm || Math.min(8, Math.max(1.5, 1.5 / mmPerPx));
     var padB = opt.padBottomMm || 0;          // 자 밑을 보려면 아래로 더 편다
@@ -950,7 +1007,8 @@ details ul{padding-left:18px;margin:7px 0}
         g[y * W + x] = val;
       }
     }
-    return { g: g, W: W, H: H, H0: H0, pxmm: pxmm, wmm: wmm, hmm: hmm, mmPerPxSrc: mmPerPx };
+    return { g: g, W: W, H: H, H0: H0, pxmm: pxmm, wmm: wmm, hmm: hmm,
+             mmPerPxSrc: mmPerPx, mmPerPxCross: mmPerPxCross };
   }
 
   /* ---- 1차원 단면 판독 ------------------------------------------------ */
@@ -2512,6 +2570,7 @@ function go(v){
   window.scrollTo(0,0);
   if(v==="home") renderHome();
   if(v==="rec") renderRecs();
+  if(v==="spot") renderSpot();
 }
 $$("#nav button").forEach(function(b){b.onclick=function(){go(b.dataset.v);};});
 $$("[data-go]").forEach(function(b){b.onclick=function(){
@@ -3176,14 +3235,16 @@ function lvJudge(p,sd){
   if(diff>tol*0.75&&diff<=tol*1.25) html+='<div class="warnbox">허용 경계값입니다(±0.4%는 약 0.23°). <b>디지털 경사계·레벨 측량으로 재확인</b>하십시오.</div>';
   html+='<div style="height:9px"></div><div class="grid2"><div><label class="lab">측정 위치</label><input type="text" id="lvPos" placeholder="예: STA.0+030 우측" value="'+(DB.site.loc||"")+'"></div>'+
     '<div><label class="lab">비고</label><input type="text" id="lvMemo" placeholder=""></div></div>'+
-    '<div style="height:9px"></div><button class="btn" id="lvSave">기록 저장</button>';
+    '<div style="height:9px"></div><button class="btn" id="lvSave">'+
+    (SPOT.on? "📍 이 측점에 넣기":"기록 저장")+'</button>';
   $("#lvRes").innerHTML=html; $("#lvResCard").classList.remove("hide");
   $("#lvSave").onclick=function(){
-    addRec({tool:(kind==="cross"?"횡단구배":"종단구배"),pos:$("#lvPos").value,grade:grade,
+    var rec={tool:(kind==="cross"?"횡단구배":"종단구배"),pos:$("#lvPos").value,grade:grade,
       main:fx(ap,2)+"%",std:"설계 "+fx(Math.abs(design),2)+"% ±"+tol+"%",
       detail:"차 "+fx(diff,2)+"%p"+(sd!==null&&sd!==undefined? " / σ "+fx(sd,3)+"%":" / 수동입력")+(($("#lvMemo").value)? " / "+$("#lvMemo").value:""),
-      photo:""});
-    toast("✔ 기록에 저장했습니다"); go("rec");
+      photo:""};
+    if(SPOT.on){ spPut("slope",rec); return; }
+    addRec(rec); toast("✔ 기록에 저장했습니다"); go("rec");
   };
   $("#lvResCard").scrollIntoView({behavior:"smooth",block:"center"});
 }
@@ -3344,8 +3405,28 @@ function renderRecs(){
   var tot=ng>0? "불량":(cau>0? "조건부":"합격");
   $("#recSum").innerHTML= n===0? '<div class="small">아직 기록이 없습니다.</div>' :
     '<div class="vd '+vdCls(tot)+'"><div class="v1">종합 '+tot+'</div><div class="v2">합격 '+ok+' · 조건부 '+cau+' · 불량 '+ng+' (총 '+n+'건)</div></div>';
-  var h="";
-  DB.recs.forEach(function(r){
+  /* ★측점으로 묶인 기록은 한 장으로 모아 보여 준다 —— 현장에서 판정은
+     항목 하나가 아니라 «그 자리»에 대해 내리는 것이다. */
+    var h="", i=0;
+  while(i<DB.recs.length){
+    var sp=DB.recs[i].spot;
+    if(sp){
+      var grp=[];
+      while(i<DB.recs.length&&DB.recs[i].spot===sp){ grp.push(DB.recs[i]); i++; }
+      var w="합격";
+      grp.forEach(function(r){ if(r.grade==="불량")w="불량"; else if(r.grade==="조건부"&&w!=="불량")w="조건부"; });
+      h+='<div class="card"><div class="ih" style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+         '<b>📍 '+sp+'</b><span class="badge '+gradeCls(w)+'">'+w+'</span></div>';
+      grp.forEach(function(r){
+        h+='<div class="kv"><span>'+r.tool+'</span><b><span class="badge '+gradeCls(r.grade)+'">'+r.grade+'</span> '+r.main+'</b></div>'+
+           '<div class="tiny" style="margin:2px 0 7px">'+r.std+' · '+r.detail+'</div>'+
+           (r.photo? '<img class="thumb" src="'+r.photo+'">':"");
+      });
+      h+='<div class="kv"><span>일시</span><b>'+grp[grp.length-1].ts+'</b></div>'+
+         '<div style="height:8px"></div><button class="btn dan" data-delspot="'+sp+'" style="padding:7px">이 측점 삭제</button></div>';
+      continue;
+    }
+    (function(r){
     h+='<div class="card"><div class="ih" style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
       '<b>'+r.tool+'</b><span class="badge '+gradeCls(r.grade)+'">'+r.grade+'</span></div>'+
       '<div class="kv"><span>측정값</span><b>'+r.main+'</b></div>'+
@@ -3355,11 +3436,16 @@ function renderRecs(){
       '<div class="tiny" style="margin-top:6px">'+r.detail+'</div>'+
       (r.photo? '<img class="thumb" src="'+r.photo+'">':"")+
       '<div style="height:8px"></div><button class="btn dan" data-del="'+r.id+'" style="padding:7px">이 기록 삭제</button></div>';
-  });
+    })(DB.recs[i]); i++;
+  }
   $("#recList").innerHTML=h;
   $$("#recList [data-del]").forEach(function(b){b.onclick=function(){
     if(!confirm("이 기록을 삭제할까요?"))return;
     DB.recs=DB.recs.filter(function(x){return x.id!==b.dataset.del;}); save(); renderRecs(); renderHome();
+  };});
+  $$("#recList [data-delspot]").forEach(function(b){b.onclick=function(){
+    if(!confirm("측점 「"+b.dataset.delspot+"」의 기록을 모두 삭제할까요?"))return;
+    DB.recs=DB.recs.filter(function(x){return x.spot!==b.dataset.delspot;}); save(); renderRecs(); renderHome();
   };});
 }
 $("#recClear").onclick=function(){
@@ -3427,6 +3513,8 @@ $("#recPrint").onclick=function(){
    init
 ══════════════════════════════════════════════ */
 loadSite(); jStdText(); renderHome(); setFlatMode("fm");
+/* ⚠renderSpot 은 여기서 부르면 안 된다 —— SPOT 은 이 아래에서 만들어진다.
+   측점 코드 끝에서 한 번 그린다. */
 window.addEventListener("resize",function(){ if(JM.img&&!$("#jStep2").classList.contains("hide"))JM.fit(); if(GM.img&&!$("#gStep2").classList.contains("hide"))GM.fit(); });
 document.addEventListener("gesturestart",function(e){e.preventDefault();});
 
@@ -3586,6 +3674,204 @@ function aPhase(){
   } else $("#aStat").textContent="";
 }
 ["#aNc","#aNr"].forEach(function(id){ $(id).oninput=aPhase; });
+/* ══════════════════════════════════════════════════════════════
+   측면 사진에서 「자」 찾기 · 사진 종류 가리기
+   --------------------------------------------------------------
+   측면 사진에서 가장 긴 곧은 선 두 줄은 자의 위·아래 모서리다. 그 둘을
+   찾으면 자 옆면 네 모서리가 정해지고, 자의 실제 길이·두께가 곧 축척이 된다.
+   ⚠자가 화면 밖으로 나가면 길이를 모른다 = 축척이 없다 → 거부한다.
+
+   평면인지 측면인지도 여기서 가린다.
+     · 나란한 긴 선이 딱 두 줄  → 자 (측면)
+     · 넉 줄 이상 고른 간격     → 블록 줄눈 (평면)
+   사람에게 모드를 묻지 않아도 되는 까닭이다.
+══════════════════════════════════════════════════════════════ */
+function rLines(img, opt){
+  opt=opt||{};
+  var W=Math.min(opt.maxW||1200, img.width), H=Math.round(img.height*W/img.width);
+  var c=document.createElement("canvas"); c.width=W; c.height=H;
+  var cx=c.getContext("2d",{willReadFrequently:true});
+  cx.drawImage(img,0,0,W,H);
+  var d=cx.getImageData(0,0,W,H).data, N=W*H;
+  var g=new Float32Array(N);
+  for(var i=0,p=0;i<N;i++,p+=4) g[i]=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+  /* 가로로 뻗은 모서리만 모은다(세로 방향 밝기 변화가 큰 점) */
+  var xs=[], ys=[], x, y;
+  for(y=2;y<H-2;y++) for(x=2;x<W-2;x++){
+    var gy=g[(y+1)*W+x]-g[(y-1)*W+x];
+    var gx=g[y*W+x+1]-g[y*W+x-1];
+    var m=gy<0?-gy:gy;
+    if(m>16 && m>(gx<0?-gx:gx)*1.2){ xs.push(x); ys.push(y); }
+  }
+  var n=xs.length;
+  if(n<80) return {W:W,H:H,scale:img.width/W,lines:[],g:g,why:"모서리다운 점이 "+n+"개뿐입니다"};
+  /* 너무 많으면 솎는다(속도) */
+  var step=Math.max(1, Math.floor(n/6000));
+  if(step>1){ var X2=[],Y2=[]; for(i=0;i<n;i+=step){X2.push(xs[i]);Y2.push(ys[i]);} xs=X2; ys=Y2; n=xs.length; }
+
+  var used=new Uint8Array(n), lines=[], seed=20260827;
+  function rnd(){ seed=(seed*1103515245+12345)>>>0; return seed/4294967296; }
+  function findOne(refTh){
+    var best=null, it;
+    for(it=0; it<900; it++){
+      var a=(rnd()*n)|0, b=(rnd()*n)|0;
+      if(a===b||used[a]||used[b]) continue;
+      var x1=xs[a], y1=ys[a], dx=xs[b]-x1, dy=ys[b]-y1;
+      var L=Math.hypot(dx,dy);
+      if(L<W*0.22) continue;
+      var th=Math.atan2(dy,dx);
+      if(th>Math.PI/2) th-=Math.PI; if(th<-Math.PI/2) th+=Math.PI;
+      if(Math.abs(th)>0.62) continue;                    // 거의 가로인 선만
+      if(refTh!=null && Math.abs(th-refTh)>0.06) continue;
+      var nx=-dy/L, ny=dx/L, cnt=0, xa=1e9, xb=-1e9, k;
+      for(k=0;k<n;k++){
+        if(used[k]) continue;
+        if(Math.abs((xs[k]-x1)*nx+(ys[k]-y1)*ny)>2.2) continue;
+        cnt++; if(xs[k]<xa)xa=xs[k]; if(xs[k]>xb)xb=xs[k];
+      }
+      var span=xb-xa;
+      if(span<W*0.30) continue;
+      var sc=cnt*Math.min(1,span/(W*0.7));
+      if(!best||sc>best.sc) best={sc:sc,cnt:cnt,x1:x1,y1:y1,nx:nx,ny:ny,th:th,xa:xa,xb:xb};
+    }
+    if(!best) return null;
+    /* 안쪽 점들로 총최소자승 다듬기 */
+    var sx=0,sy=0,m=0,idx=[],k2;
+    for(k2=0;k2<n;k2++){
+      if(used[k2]) continue;
+      if(Math.abs((xs[k2]-best.x1)*best.nx+(ys[k2]-best.y1)*best.ny)>2.2) continue;
+      idx.push(k2); sx+=xs[k2]; sy+=ys[k2]; m++;
+    }
+    if(m<20) return null;
+    var mx=sx/m, my=sy/m, sxx=0, sxy=0, k3;
+    for(k3=0;k3<idx.length;k3++){
+      var ddx=xs[idx[k3]]-mx, ddy=ys[idx[k3]]-my;
+      sxx+=ddx*ddx; sxy+=ddx*ddy;
+    }
+    var slope = sxx>1e-9 ? sxy/sxx : 0;
+    var line={mx:mx,my:my,slope:slope,cnt:m,xa:best.xa,xb:best.xb,
+              th:Math.atan(slope),
+              at:function(X){ return this.my + (X-this.mx)*this.slope; }};
+    for(k3=0;k3<idx.length;k3++) used[idx[k3]]=1;
+    /* 선 둘레 ±5화소도 같이 지운다(같은 모서리를 두 번 찾지 않게) */
+    for(k3=0;k3<n;k3++){
+      if(used[k3]) continue;
+      if(Math.abs(ys[k3]-line.at(xs[k3]))<5) used[k3]=1;
+    }
+    return line;
+  }
+  var first=findOne(null);
+  if(first){
+    lines.push(first);
+    for(var t=0;t<4;t++){
+      var L2=findOne(first.th);
+      if(!L2) break;
+      lines.push(L2);
+    }
+  }
+  lines.sort(function(a,b){ return a.at(W/2)-b.at(W/2); });   // 위에서 아래로
+  return {W:W,H:H,scale:img.width/W,lines:lines,g:g};
+}
+
+/* 나란한 선들의 간격이 고른가 —— 줄눈(평면)의 표식 */
+function rEven(lines, W){
+  if(lines.length<4) return false;
+  var d=[],i;
+  for(i=1;i<lines.length;i++) d.push(lines[i].at(W/2)-lines[i-1].at(W/2));
+  d.sort(function(a,b){return a-b;});
+  var med=d[d.length>>1];
+  if(!(med>4)) return false;
+  var bad=0;
+  for(i=0;i<d.length;i++) if(Math.abs(d[i]-med)>med*0.35) bad++;
+  return bad<=Math.floor(d.length*0.34);
+}
+
+function findRuler(img){
+  var R=rLines(img);
+  if(R.lines.length<2) return {ok:false,why:(R.why||"자의 위·아래 모서리를 못 찾았습니다")};
+  if(rEven(R.lines,R.W)) return {ok:false,why:"고른 간격의 선이 여럿입니다(자가 아니라 줄눈으로 보입니다)"};
+  /* 자 = 서로 가장 «자다운» 두 줄. 두께는 화면 높이의 2~40% 안,
+     사이가 밝고 고르며(알루미늄), 그 안에 다른 모서리가 없다. */
+  var W=R.W, H=R.H, g=R.g, best=null, i, j;
+  for(i=0;i<R.lines.length;i++) for(j=i+1;j<R.lines.length;j++){
+    var A=R.lines[i], B=R.lines[j];
+    var gap=B.at(W/2)-A.at(W/2);
+    if(gap<H*0.012||gap>H*0.45) continue;
+    var xa=Math.max(A.xa,B.xa), xb=Math.min(A.xb,B.xb);
+    if(xb-xa<W*0.35) continue;
+    /* ★★자인지 줄눈인지 —— 자는 긴 선이 «딱 두 줄»이다. 같은 간격으로 세 번째
+       줄이 이어지면 그건 되풀이되는 무늬, 곧 블록 줄눈이다.
+       ⚠이 검사가 없으면 위에서 찍은 줄눈 사진에서 이웃한 줄눈 두 개를 자로
+         잘못 보고, 그것이 화면 끝에 닿아 있으니 «자가 잘렸다»며 판독을
+         통째로 막아 버린다(합성 시험에서 평면 4장 중 3장이 그랬다). */
+    var rep=false, kk;
+    for(kk=0;kk<R.lines.length;kk++){
+      if(kk===i||kk===j) continue;
+      var dA=A.at(W/2)-R.lines[kk].at(W/2), dB=R.lines[kk].at(W/2)-B.at(W/2);
+      if((dA>gap*0.55&&dA<gap*1.7)||(dB>gap*0.55&&dB<gap*1.7)){ rep=true; break; }
+    }
+    if(rep) continue;
+    /* ★★자와 줄눈을 가르는 표식 —— 자는 «띠»가 위아래와 뚜렷이 다르다.
+       자는 몸통이 밝고 밑은 그늘이며 위는 배경이다. 줄눈은 위도 아래도
+       같은 블록 낯이라 밝기가 그대로다.
+       합성 시험 실측 : 자 = 띠 228 / 아래 144 / 위 111
+                        줄눈 = 띠 177 / 아래 178 / 위 176  (차이가 없다) */
+    var xI=Math.round(xa), xE=Math.round(xb);
+    function strip(f0,f1){
+      var s=0,s2=0,m=0,x,y;
+      for(x=xI;x<xE;x+=3){
+        var y0=A.at(x)+gap*f0, y1=A.at(x)+gap*f1;
+        for(y=Math.round(y0);y<y1;y+=2){
+          if(y<0||y>=H) continue;
+          var v=g[y*W+x]; s+=v; s2+=v*v; m++;
+        }
+      }
+      return m<40? null : {mean:s/m, sd:Math.sqrt(Math.max(0,s2/m-(s/m)*(s/m)))};
+    }
+    var band=strip(0.25,0.75);
+    if(!band) continue;
+    var below=strip(1.15,1.9), above=strip(-0.75,-0.15);
+    var dB=below? band.mean-below.mean : null;
+    var dA=above? band.mean-above.mean : null;
+    var stands;
+    if(dB!=null&&dA!=null) stands = (dB*dA>0) && Math.min(Math.abs(dB),Math.abs(dA))>=20;
+    else if(dB!=null) stands = Math.abs(dB)>=25;
+    else if(dA!=null) stands = Math.abs(dA)>=25;
+    else stands = false;
+    if(!stands) continue;
+    var mean=band.mean, sd=band.sd;
+    var sc=(xb-xa)/W*2 + Math.min(A.cnt,B.cnt)/1000 - sd/60
+           + Math.min(2, Math.min(Math.abs(dB==null?dA:dB), Math.abs(dA==null?dB:dA))/60);
+    if(!best||sc>best.sc) best={sc:sc,A:A,B:B,xa:xa,xb:xb,mean:mean,sd:sd,gap:gap,
+                                도드라짐:Math.round(dB==null?dA:(dA==null?dB:Math.min(Math.abs(dA),Math.abs(dB))))};
+  }
+  if(!best) return {ok:false,why:"자의 위·아래 모서리 한 쌍을 못 찾았습니다"};
+  if(best.xa<W*0.04||best.xb>W*0.96)
+    return {ok:false,cut:true,
+            why:"자가 화면 밖으로 나갑니다 — 자 전체가 들어오게 한 걸음 물러서서 찍어 주십시오"};
+  var k=R.scale;
+  var q=[{x:best.xa*k, y:best.A.at(best.xa)*k},
+         {x:best.xb*k, y:best.A.at(best.xb)*k},
+         {x:best.xb*k, y:best.B.at(best.xb)*k},
+         {x:best.xa*k, y:best.B.at(best.xa)*k}];
+  return {ok:true, quad:q, snapPts:[], 두께px:+best.gap.toFixed(1),
+          띠밝기:+best.mean.toFixed(0), 띠고름:+best.sd.toFixed(1),
+          도드라짐:best.도드라짐, 선수:R.lines.length};
+}
+
+/* 사진 한 장이 무엇인지 가린다: "side" | "plan" | "?" */
+function classifyPhoto(img){
+  var S=findRuler(img);
+  if(S.ok) return {kind:"side", side:S};
+  /* ⚠자다운 것을 찾았는데 화면 밖으로 나가 물린 경우, 평면으로 넘기면 안 된다.
+     측면 사진의 포장 줄눈이 세로 격자로 잡혀 엉뚱한 줄눈 값을 낸다
+     (합성 시험에서 실제로 «plan» 으로 넘어갔다). 여기서 멈춘다. */
+  if(S.cut) return {kind:"?", why:S.why};
+  var P=aFindQuad(img);
+  if(P.ok) return {kind:"plan", plan:P};
+  return {kind:"?", why:"자도 줄눈 격자도 못 찾았습니다 · 자: "+S.why+" / 줄눈: "+P.why};
+}
+
 /* ══════════════════════════════════════════════════════════════
    구획 네 모서리 자동 제안
    --------------------------------------------------------------
@@ -3778,6 +4064,166 @@ function aSrcCanvas(){
   return c;
 }
 function aQuad(){ return AM.pts.quad.map(function(p){return [p.x,p.y];}); }
+
+/* ══════════════════════════════════════════════════════════════
+   측점 검측 —— 한 자리 = 한 묶음
+   --------------------------------------------------------------
+   재는 정보의 출처는 셋이고, 그건 못 합친다.
+     · 평면 안의 2차원 위치 → 위에서 찍은 사진      (줄눈 폭·통직도)
+     · 평면에서 벗어난 높이 → 자를 대고 옆에서 찍은 사진 (평탄성·단차)
+     · 중력에 대한 기울기   → 폰 센서                 (경사)
+   ⚠위에서 찍은 사진으로 평탄성을 재려는 것은, 「바닥은 평면」이라는 가정을
+     깔고 원근을 푼 다음 그 가정의 위반을 재려는 셈이라 원리상 안 된다.
+   합칠 수 있는 것은 «화면»이다. 사진 종류를 사람이 고를 이유가 없고,
+   한 자리의 네 항목이 따로 놀 이유도 없다.
+══════════════════════════════════════════════════════════════ */
+var SPOT={on:false, kind:"flat", items:{}};
+var SPNAME={slope:"경사", flat:"평탄성", step:"단차", joint:"줄눈"};
+
+function spTitle(){ var v=($("#spName").value||"").trim(); return v||"측점"; }
+
+function renderSpot(){
+  var h="", n=0, worst="합격";
+  ["slope","flat","step","joint"].forEach(function(k){
+    var r=SPOT.items[k];
+    if(r){
+      n++;
+      if(r.grade==="불량") worst="불량";
+      else if(r.grade==="조건부"&&worst!=="불량") worst="조건부";
+    }
+    h+='<div class="kv"><span>'+SPNAME[k]+'</span><b>'+
+       (r? '<span class="badge '+gradeCls(r.grade)+'">'+r.grade+'</span> '+r.main
+         : '<span style="opacity:.5">아직</span>')+'</b></div>';
+  });
+  $("#spItems").innerHTML=h;
+  $("#spSum").innerHTML= n
+    ? '<div style="height:9px"></div><div class="vd '+vdCls(worst)+'">'+
+      '<div class="v1">이 측점 '+worst+'</div><div class="v2">'+spTitle()+' · 잰 항목 '+n+'개'+
+      (n<4? ' (나머지는 안 재도 저장됩니다)':'')+'</div></div>'
+    : '<div class="tiny" style="margin-top:8px">아직 잰 것이 없습니다. 위에서 경사를 재거나 사진을 넣으십시오.</div>';
+}
+
+/* 잰 결과를 측점 칸에 넣는다(낱개 저장 대신) */
+function spPut(slot,rec){
+  SPOT.items[slot]=rec;
+  toast("📍 "+SPNAME[slot]+"을(를) 측점에 넣었습니다");
+  go("spot");
+}
+
+function spNextName(nm){
+  var m=String(nm).match(/^(.*?)(\d+)\s*$/);
+  return m? m[1]+(parseInt(m[2],10)+1) : nm+"-2";
+}
+
+$("#spSave").onclick=function(){
+  var ks=["joint","flat","step","slope"].filter(function(k){return SPOT.items[k];});
+  if(!ks.length){ toast("아직 잰 것이 없습니다"); return; }
+  var nm=spTitle();
+  ks.forEach(function(k){
+    var r=SPOT.items[k];
+    r.spot=nm; r.pos=r.pos||nm;
+    addRec(r);
+  });
+  toast("✔ 측점 "+nm+" 저장 · "+ks.length+"항목");
+  SPOT.items={}; SPOT.on=false;
+  $("#spName").value=spNextName(nm);
+  renderSpot(); go("rec");
+};
+$("#spClear").onclick=function(){
+  if(Object.keys(SPOT.items).length&&!confirm("이 측점에 담긴 값을 버립니다. 계속할까요?")) return;
+  SPOT.items={}; SPOT.on=false; $("#spMsg").innerHTML=""; renderSpot();
+};
+$("#spSlope").onclick=function(){ SPOT.on=true; go("slope"); };
+$$(".spkind").forEach(function(b){ b.onclick=function(){
+  $$(".spkind").forEach(function(x){x.classList.remove("on");});
+  b.classList.add("on"); SPOT.kind=b.dataset.k;
+};});
+$("#spShot").onclick=function(){ pickPhoto("#spFile",true); };
+$("#spPick").onclick=function(){ pickPhoto("#spFile",false); };
+$("#spFile").onchange=function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f)return;
+  e.target.value="";
+  SPOT.on=true;
+  $("#spMsg").innerHTML='<div class="tiny">사진을 살펴보는 중입니다 — 자인지 줄눈인지 가리는 중…</div>';
+  var fr=new FileReader();
+  fr.onload=function(ev){
+    uF35=null;
+    try{ uF35=BlockAuto.exifFocal35(ev.target.result)||null; }catch(err){}
+    var im=new Image();
+    im.onload=function(){
+      AM.img=im;
+      /* 측점 입력값을 판독 입력칸으로 옮긴다 — 계산은 그쪽 코드를 그대로 쓴다 */
+      $("#aBw").value=$("#spBw").value; $("#aBh").value=$("#spBh").value;
+      $("#aBj").value=$("#spBj").value; $("#aTol").value=$("#spTol").value;
+      $("#aPos").value=spTitle();
+      setTimeout(spClassify,30);
+    };
+    im.onerror=function(){ $("#spMsg").innerHTML='<div class="warnbox">사진을 열지 못했습니다.</div>'; };
+    var fr2=new FileReader();
+    fr2.onload=function(e2){ im.src=e2.target.result; };
+    fr2.readAsDataURL(f);
+  };
+  fr.readAsArrayBuffer(f);
+};
+
+function spClassify(){
+  var k;
+  try{ k=classifyPhoto(AM.img); }
+  catch(err){ k={kind:"?",why:"살펴보다 오류: "+err.message}; }
+  if(k.kind==="side"){ spOpenSide(k.side); return; }
+  if(k.kind==="plan"){ spOpenPlan(k.plan); return; }
+  /* ★못 가리겠으면 찍어 맞히지 않는다 — 사람에게 묻는다 */
+  $("#spMsg").innerHTML='<div class="warnbox">⚠ <b>이 사진이 무엇인지 못 가리겠습니다.</b><br>'+k.why+
+    '</div><div class="btnrow" style="margin-top:9px">'+
+    '<button class="btn sec" id="spAsSide">자를 옆에서 찍었다</button>'+
+    '<button class="btn sec" id="spAsPlan">위에서 줄눈을 찍었다</button></div>';
+  $("#spAsSide").onclick=function(){ spOpenSide(null); };
+  $("#spAsPlan").onclick=function(){ spOpenPlan(null); };
+}
+
+/* 판독 화면(④)을 «측점의 다음 단계»로 연다. 네 점은 이미 놓여 있고,
+   사람은 어긋난 것만 끌어 고치면 된다. */
+function spOpenCommon(mode,banner){
+  var im=AM.img;
+  aMode=mode;
+  $$(".amode").forEach(function(b){ b.classList.toggle("on", b.dataset.m===mode); });
+  aStd();                    // ⚠aReset 을 부른다 → 점이 지워지므로 이 뒤에 놓는다
+  AM.img=im; AM.fit();
+  $("#aStep1").classList.add("hide"); $("#aStep2").classList.remove("hide");
+  $("#aStep3").classList.add("hide");
+  go("auto");
+  $("#aBnTxt").textContent=banner;
+  $("#spMsg").innerHTML="";
+}
+function spOpenPlan(P){
+  spOpenCommon("plan","측점 "+spTitle()+" · 위에서 본 줄눈 사진으로 봤습니다");
+  if(P&&P.ok){ aSug=P; AM.snapPts=P.snapPts||[];
+    AM.pts.quad=P.quad.map(function(p){return {x:p.x,y:p.y};});
+    if(P.swapWH){ var t=$("#aBw").value; $("#aBw").value=$("#aBh").value; $("#aBh").value=t; }
+    if(P.trusted){ $("#aNc").value=P.nc; $("#aNr").value=P.nr; $("#aCntNote").textContent=" (앱이 센 값입니다)"; }
+    else { $("#aNc").value=""; $("#aNr").value=""; $("#aCntNote").textContent="";
+      $("#aHelp").innerHTML="⚠ <b>장수는 직접 세어 넣으십시오</b> — "+P.untrust+"."; }
+    AM.draw();
+  } else { aSuggest(true); }
+  aPhase();
+}
+function spOpenSide(S){
+  aKind=SPOT.kind;
+  $$(".akind").forEach(function(b){ b.classList.toggle("on", b.dataset.k===aKind); });
+  spOpenCommon("side","측점 "+spTitle()+" · 자를 옆에서 찍은 사진으로 봤습니다");
+  if(S&&S.ok){
+    AM.snapPts=[];
+    AM.pts.quad=S.quad.map(function(p){return {x:p.x,y:p.y};});
+    $("#aHelp").innerHTML="자의 <b>위·아래 모서리</b>를 앱이 찾아 네 점을 놓았습니다. "+
+      "어긋났으면 <b>끌어서</b> 고치십시오 — 끄는 동안 확대창이 따라옵니다.";
+    AM.draw();
+  } else {
+    AM.pts.quad=[];
+    $("#aHelp").innerHTML="자를 못 찾았습니다 — <b>자 옆면의 네 귀퉁이</b>를 «점 찍기»로 찍어 주십시오.";
+  }
+  aPhase();
+}
+renderSpot();
 /* 펴진 mm 좌표 → 원본 사진 좌표 (검출 지점을 화면에 되돌려 그리기 위함) */
 function aBack(rect){
   var H0=rect.H0||rect.H;
@@ -3898,7 +4344,8 @@ function aReadSide(){
   AM.auto=gp.filter(function(q){return q.ok;}).map(function(q){ return back(q.s,T+q.gap); });
   AM.draw();
   aRes={kind:"side", r:r, tol:tol, L:L, skip:skip, kindName:aKind==="flat"?"평탄성":"단차(고저차)",
-        dir:aKind==="flat"?(aDir==="cross"?"횡단":"종단"):null, mm:rect.mmPerPxSrc};
+        dir:aKind==="flat"?(aDir==="cross"?"횡단":"종단"):null,
+        mm:rect.mmPerPxSrc, mmCross:rect.mmPerPxCross};
   aRender();
 }
 
@@ -3971,7 +4418,10 @@ function aRender(){
        「허용값이 1.8화소」 경고가 떠 있었다 — 허용값이 몇 화소도 안 되면
        0.0mm 는 '평탄하다'가 아니라 '못 쟀다'는 뜻이다.
        ④탭 자동판독에서 잡음과 편차를 가른 것과 같은 원칙. */
-    var resPx = aRes.tol / Math.max(aRes.mm, 1e-6);
+    /* ⚠재는 방향(자 밑 깊이)의 해상도로 가려야 한다 — 자 길이 방향 값으로
+       가리면 2배 넘게 깐깐해져 멀쩡한 사진이 「판정 유보」로 떨어진다. */
+    var resMm = aRes.mmCross || aRes.mm;
+    var resPx = aRes.tol / Math.max(resMm, 1e-6);
     var tooCoarse = resPx < 8;
     var grade = tooCoarse ? "조건부" : r.grade;
     html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">'+
@@ -3994,7 +4444,8 @@ function aRender(){
     html+='<div class="kv"><span>최대 틈 위치</span><b>자 시작점에서 '+fx(r.at,0)+'mm</b></div>';
     html+='<div class="kv"><span>평균 틈</span><b>'+fx(r.avg,2)+'mm</b></div>';
     html+='<div class="kv"><span>측점 수</span><b>'+r.n+'개</b></div>';
-    html+='<div class="kv"><span>사진 해상도</span><b>'+fx(aRes.mm,3)+' mm/화소</b></div>';
+    html+='<div class="kv"><span>사진 해상도</span><b>깊이 '+fx(resMm,3)+
+      ' · 길이 '+fx(aRes.mm,3)+' mm/화소</b></div>';
     
     aRes.rec={tool:"자동판독·"+aRes.kindName+(aRes.dir?"("+aRes.dir+")":""),
       pos:$("#aPos").value||DB.site.loc, grade:grade,
@@ -4004,11 +4455,19 @@ function aRender(){
       photo:AM.snapshot(880)};
   }
   html+='<img class="thumb" src="'+aRes.rec.photo+'" alt="판독 결과" />';
-  html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="aSave">기록 저장</button><button class="btn sec" id="aAgain">다시 판독</button></div>';
+  html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="aSave">'+
+        (SPOT.on? "📍 이 측점에 넣기":"기록 저장")+
+        '</button><button class="btn sec" id="aAgain">다시 판독</button></div>';
   html+='<div class="tiny" style="margin-top:8px">자동판독은 <b>1차 선별</b>입니다. 허용값 경계(±20% 이내)이거나 판정이 갈리는 구간은 현장 실측으로 확인하십시오. 값이 이상하면 규격·블록 장수를 고쳐 «다시 판독»하십시오.</div>';
   $("#aResBox").innerHTML=html;
   $("#aStep2").classList.add("hide"); $("#aStep3").classList.remove("hide");
-  $("#aSave").onclick=function(){ addRec(aRes.rec); toast("✔ 기록에 저장했습니다"); go("rec"); };
+  $("#aSave").onclick=function(){
+    if(SPOT.on){
+      spPut(aRes.kind==="plan"? "joint" : (aKind==="step"? "step":"flat"), aRes.rec);
+      return;
+    }
+    addRec(aRes.rec); toast("✔ 기록에 저장했습니다"); go("rec");
+  };
   $("#aAgain").onclick=function(){ $("#aStep3").classList.add("hide"); $("#aStep2").classList.remove("hide"); AM.fit(); };
   $$("#aResBox .atab tr[data-i]").forEach(function(tr){
     tr.onclick=function(){ var i=+tr.dataset.i; aRes.rows[i].off=!aRes.rows[i].off; aRender(); };
