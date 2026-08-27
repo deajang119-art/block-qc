@@ -2113,14 +2113,31 @@ details ul{padding-left:18px;margin:7px 0}
      1.559~1.602 두 무리 → 옛 코드는 1.602, 최고점을 골라도 1.580. */
   function fitScale(px, py, bw, bh, keep, minLines) {
     keep = keep || 0.90; minLines = minLines || 4;
+    /* ★★엄격하게 먼저, 안 되면 느슨하게 —— 두 단계로 한다.
+       ⚠최소 줄 수를 낮추면 «아주 큰 간격에 두 줄만» 놓은 것이 만점을 받아
+         최고점을 끌어올리고, 그 바람에 참 간격이 통과선 밑으로 떨어진다
+         (실측: 엇금·급경사 사진이 2×2 줄로 무너졌다).
+         그러니 느슨한 규칙은 «엄격한 규칙으로 아무것도 못 찾았을 때»만 쓴다.
+       300각처럼 큰 블록을 찍으면 한 축에 한두 장뿐이라 그때 이 길이 필요하다. */
+    var r = tryFit(true);
+    if (!r) r = tryFit(false);
+    return r;
+
+    function tryFit(strict) {
     var nx = px.length, ny = py.length;
     var lo = Math.max(12 / bw, 12 / bh);
-    var hi = Math.min(nx / (minLines - 1) / bw, ny / (minLines - 1) / bh);
+    var hi = strict
+      ? Math.min(nx / (minLines - 1) / bw, ny / (minLines - 1) / bh)
+      : Math.min(Math.max(nx / (minLines - 1) / bw, ny / (minLines - 1) / bh),
+                 Math.min(nx / bw, ny / bh));
     if (hi <= lo * 1.05) return null;
     var NS = 220, rows = [], i;
     for (i = 0; i < NS; i++) {
       var s = Math.exp(Math.log(lo) + (Math.log(hi) - Math.log(lo)) * i / (NS - 1));
-      var a = gridScore(px, s * bw, minLines), b = gridScore(py, s * bh, minLines);
+      var Tx = s * bw, Ty = s * bh;
+      var mlx = strict ? minLines : Math.max(2, Math.min(minLines, Math.floor(nx / Tx)));
+      var mly = strict ? minLines : Math.max(2, Math.min(minLines, Math.floor(ny / Ty)));
+      var a = gridScore(px, Tx, mlx), b = gridScore(py, Ty, mly);
       rows.push({ s: s, sc: a.sc + b.sc, phx: a.ph, phy: b.ph, sx: a.sc, sy: b.sc });
     }
     var mx = -1e18;
@@ -2130,7 +2147,8 @@ details ul{padding-left:18px;margin:7px 0}
     for (i = 0; i < rows.length; i++) if (rows[i].sc >= mx * keep) { pick = rows[i]; break; }
     if (!pick) return null;
     return { s: pick.s, Tx: pick.s * bw, Ty: pick.s * bh, phx: pick.phx, phy: pick.phy,
-             sx: pick.sx, sy: pick.sy, score: pick.sc };
+             sx: pick.sx, sy: pick.sy, score: pick.sc, loose: !strict };
+    }
   }
 
   /* 격자 근처에서 실제 골 위치를 소수점까지 */
@@ -2466,8 +2484,8 @@ details ul{padding-left:18px;margin:7px 0}
        빗을 대려면 한 방향에 적어도 4줄이 있어야 하는데, 300각 블록을 가까이서
        찍으면 세로로 두어 장밖에 안 들어온다(합성 시험에서 확인). */
     if (!fits.length) {
-      R.why = "줄눈 간격을 못 찾았습니다 — 블록이 가로·세로로 각각 4장 이상 "
-            + "들어오도록 한두 걸음 물러서서 다시 찍어 주십시오.";
+      R.why = "줄눈 간격을 못 찾았습니다 — 한 방향으로 블록이 최소 두 장, "
+            + "다른 방향으로 네 장은 들어오게 찍어 주십시오.";
       return R;
     }
     fits.sort(function (p, q) { return q.score - p.score; });
@@ -3685,7 +3703,8 @@ function aStd(){
       '<div class="kv"><span>줄눈 선형 허용</span><b>±'+STD.jointLine.tol+'mm</b></div>'+
       '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
       '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
-    $("#aShoot").innerHTML="촬영 요령 — ① 구획 <b>네 모서리가 모두</b> 화면에 들어오게 — 길게 담아도 됩니다(줄눈마다 정밀도를 따로 알려줍니다) ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 초광각만 피하십시오</b> — 원근은 네 모서리로 정확히 펴지만, 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로.";
+    $("#aShoot").innerHTML="촬영 요령 — ⓪ <b>300각처럼 큰 블록은 팔을 뻗어 높이 들고 완만하게</b> 찍으십시오 "+
+      "(눈높이에서 비스듬히 찍으면 깊이 쪽에 한 장 반밖에 안 담겨 격자를 못 잡습니다) ① 구획 <b>네 모서리가 모두</b> 화면에 들어오게 — 길게 담아도 됩니다(줄눈마다 정밀도를 따로 알려줍니다) ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 초광각만 피하십시오</b> — 원근은 네 모서리로 정확히 펴지만, 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로.";
   }else{
     var f=aKind==="flat";
     $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
@@ -4054,7 +4073,14 @@ function aFindQuad(img){
   }
   var lx=(R.lines.x||[]).slice().sort(function(a,b){return a-b;});
   var ly=(R.lines.y||[]).slice().sort(function(a,b){return a-b;});
-  if(lx.length<4||ly.length<4) return {ok:false,why:"줄눈선이 "+lx.length+"×"+ly.length+"개뿐입니다"};
+  /* ★300각처럼 큰 블록은 한 축에 두어 줄뿐일 수 있다. 한 축만 넉넉하면 받는다
+     (줄이 셋이면 칸이 둘 — 재는 데는 모자라지 않다). */
+  if(Math.min(lx.length,ly.length)<3 || Math.max(lx.length,ly.length)<4){
+    var thin = lx.length<ly.length ? "가로" : "세로";
+    return {ok:false, why:"줄눈선이 "+lx.length+"×"+ly.length+"개뿐입니다 — "+thin+
+      " 쪽에 블록이 한두 장밖에 안 들어왔습니다. 300각처럼 큰 블록은 눈높이에서 비스듬히 찍으면 "+
+      "깊이 쪽에 한 장 반밖에 안 담깁니다 — <b>팔을 뻗어 높이 들고 완만하게</b> 찍으면 훨씬 많이 들어옵니다"};
+  }
 
   /* ★장수를 믿어도 되는지 —— 빗살 사이에 또 다른 줄눈이 있으면 하나 걸러
      하나만 센 것이다. 장수는 곧 축척이라 틀린 값을 조용히 채우면 안 된다. */
@@ -4094,7 +4120,8 @@ function aFindQuad(img){
   var trusted=(gx===0&&gy===0&&!!uF35);
   var untrust = !uF35 ? "사진에 초점 정보(EXIF)가 없어 가로세로 비를 복원하지 못했습니다 — 제안한 모서리도 한쪽으로 어긋나 있을 수 있으니 끌어서 맞추십시오"
                       : "줄눈을 하나 걸러 하나만 잡았을 수 있습니다";
-  if(lx.length<4||ly.length<4) return {ok:false,why:"쓸 만한 줄눈선이 모자랍니다"};
+  if(Math.min(lx.length,ly.length)<3 || Math.max(lx.length,ly.length)<4)
+    return {ok:false,why:"쓸 만한 줄눈선이 모자랍니다"};
 
   /* 「제대로 펴진 자리」만 쓴다. 가장자리는 원근이 심해 격자가 흐릿하다. */
   var V=R.valid, RW=R.rect.W, RH=R.rect.H;
@@ -4113,20 +4140,23 @@ function aFindQuad(img){
     for(jj=0;jj<NJ;jj++) acc.push(acc[jj]+(ok(lx[ii],ly[jj])?1:0));
     col.push(acc);
   }
+  /* 좁은 축은 «두 칸»까지 받아 준다(300각처럼 큰 블록) */
+  var minJ = NJ>=5? 3 : 2, minI = NI>=5? 4 : 3;
   var bi0=-1,bi1=-1,bj0=-1,bj1=-1,bArea=0;
-  for(var a=0;a<NJ;a++) for(var b=a+3;b<NJ;b++){
+  for(var a=0;a<NJ;a++) for(var b=a+minJ;b<NJ;b++){
     var need=b-a+1, run=0;
     for(ii=0;ii<NI;ii++){
       if(col[ii][b+1]-col[ii][a]===need){
         run++;
-        if(run>=4){
+        if(run>=minI){
           var area=(run-1)*(b-a);
           if(area>bArea){ bArea=area; bi0=ii-run+1; bi1=ii; bj0=a; bj1=b; }
         }
       } else run=0;
     }
   }
-  if(bArea<9) return {ok:false,why:"제대로 펴진 구간이 3×3장에 못 미칩니다"};
+  if(bArea<(minI-1)*minJ)
+    return {ok:false,why:"제대로 펴진 구간이 "+(minI-1)+"×"+minJ+"장에 못 미칩니다"};
   var i0=bi0,i1=bi1,j0=bj0,j1=bj1;
   /* 너무 크게 잡으면 펴기가 무거워진다 — 20장까지만(가운데를 남긴다) */
   while((i1-i0)>20){ i0++; if((i1-i0)>20)i1--; }
