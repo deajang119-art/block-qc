@@ -4189,8 +4189,19 @@ function aFindQuad(img){
      3행으로 널뛴 원인이 이것이다).
      빗살 사이 봉우리가 2개 이상이면 엇금(반 장 어긋남)으로는 설명이 안 된다 —
      그건 확실한 배수다. 그 축만 잘게 다시 그린다. */
-  function reline(prof, lines, g){
+  /* mmPitch = 이 축의 «맞춰진» 칸 간격(mm). cand = 블록으로 설명되는 값들.
+     ★배수는 «블록 치수로 설명되는 것»만 받는다.
+       세척골재처럼 거친 마감은 빗살 사이에 봉우리를 여럿 만든다.
+       실측(2026-08-28 현장 3): 봉우리 6개 → 격자를 1/7 로 잘게 쪼개
+       200×100 바닥을 «14.7mm 칸»으로 세었고, 장수가 20칸 한계까지 튀었다.
+       103/2=51.5 처럼 블록으로 설명 안 되는 값이면 배수가 아니라 «무늬»다. */
+  function reline(prof, lines, g, mmPitch, cand){
     if(g<1||lines.length<2) return lines;
+    if(mmPitch>0&&cand&&cand.length){
+      var t2=mmPitch/(g+1);
+      var okDim=cand.some(function(dm){ return dm>0 && Math.abs(t2-dm)/dm<0.15; });
+      if(!okDim) return lines;                 // 무늬였다 — 격자를 건드리지 않는다
+    }
     var d=[],t;
     for(t=1;t<lines.length;t++) d.push(lines[t]-lines[t-1]);
     d.sort(function(a,b){return a-b;});
@@ -4201,9 +4212,11 @@ function aFindQuad(img){
     if(!out||out.length<=lines.length) return lines;
     return out.slice().sort(function(a,b){return a-b;});
   }
-  if(gx>=2){ lx=reline(pfV,lx,gx); gx=BlockAuto.gapPeaks(pfV,lx); }
-  if(gy>=2){ ly=reline(pfH,ly,gy); gy=BlockAuto.gapPeaks(pfH,ly); }
-  if(gx>=1&&gx===gy){ lx=reline(pfV,lx,gx); ly=reline(pfH,ly,gy);
+  var mmX=(R.fit&&R.fit.mm)? R.fit.mm[0] : 0, mmY=(R.fit&&R.fit.mm)? R.fit.mm[1] : 0;
+  var candDim=[bw+jm, bh+jm];
+  if(gx>=2){ lx=reline(pfV,lx,gx,mmX,candDim); gx=BlockAuto.gapPeaks(pfV,lx); }
+  if(gy>=2){ ly=reline(pfH,ly,gy,mmY,candDim); gy=BlockAuto.gapPeaks(pfH,ly); }
+  if(gx>=1&&gx===gy){ lx=reline(pfV,lx,gx,mmX,candDim); ly=reline(pfH,ly,gy,mmY,candDim);
                       gx=BlockAuto.gapPeaks(pfV,lx); gy=BlockAuto.gapPeaks(pfH,ly); }
   if(lx.length<4||ly.length<4) return {ok:false,why:"줄눈선이 "+lx.length+"×"+ly.length+"개뿐입니다"};
   /* ⚠엇금(벽돌형)에서는 «반 장 간격»이 정상인 축이 하나 생긴다. 그런데 그
@@ -4271,8 +4284,41 @@ function aFindQuad(img){
   var kTop=0,kBest=1e18;
   for(var kk=0;kk<4;kk++){ var vv=cor[kk].p.x+cor[kk].p.y; if(vv<kBest){kBest=vv;kTop=kk;} }
   cor=[cor[kTop],cor[(kTop+1)%4],cor[(kTop+2)%4],cor[(kTop+3)%4]];
+  /* ★★동선(진행방향)으로 축을 잡는다 — 2026-08-28 사용자 지시.
+       화면 좌표로만 「0→1 이 가로」라고 정하면, 보도가 화면에서 비스듬히
+       누워 있을 때 판정 축이 동선과 어긋난다.
+     어떻게 가리나 —— 땅 위 직사각형을 내려다보면
+       · «가로지르는» 두 변(가까운 변·먼 변)은 원근으로 길이가 «많이» 달라진다
+       · «동선을 따라가는» 두 변은 둘 다 가까운 곳→먼 곳이라 길이가 «비슷»하다
+     그래서 두 쌍 중 길이비가 «작은» 쪽이 동선이다.
+     ⚠정면에 가까워 원근이 거의 없으면 두 비가 다 1에 가까워 못 가린다.
+       그때는 손대지 않고 화면 기준을 그대로 둔다(찍는 규칙이 세로이므로). */
+  function elen(u,v){ return Math.hypot(cor[v].p.x-cor[u].p.x, cor[v].p.y-cor[u].p.y); }
+  var eA=elen(0,1), eA2=elen(3,2);              // 0→1 쌍
+  var eB=elen(0,3), eB2=elen(1,2);              // 0→3 쌍
+  var rA=Math.max(eA,eA2)/Math.max(1e-6,Math.min(eA,eA2));
+  var rB=Math.max(eB,eB2)/Math.max(1e-6,Math.min(eB,eB2));
+  var flowIs03 = true, flowSure = false;
+  if(Math.max(rA,rB)>1.06){                     // 원근이 있어야 가릴 수 있다
+    flowIs03 = (rB<=rA);                        // 길이비가 작은 쪽이 동선
+    flowSure = (Math.abs(rA-rB)/Math.max(rA,rB) > 0.05);
+  }
+  /* 동선이 0→1 쪽이면 모서리를 한 칸 돌려 «동선이 0→3(=hmm 축)»으로 오게 한다.
+     판정은 hmm 축을 따라 뻗는 줄눈(세로)만 하므로, 이 한 번의 회전이
+     「동선 줄눈을 판정한다」를 보장한다. */
+  var flowRot=false;
+  if(!flowIs03 && flowSure){
+    cor=[cor[1],cor[2],cor[3],cor[0]];
+    flowRot=true;
+  }
+  var flowDeg=(function(){                      // 화면에서 동선이 기운 각(0°=위아래)
+    var dx=(cor[3].p.x+cor[2].p.x)/2-(cor[0].p.x+cor[1].p.x)/2;
+    var dy=(cor[3].p.y+cor[2].p.y)/2-(cor[0].p.y+cor[1].p.y)/2;
+    return Math.round(Math.atan2(dx,Math.abs(dy)||1e-6)*180/Math.PI);
+  })();
   var c=cor.map(function(q){return q.p;});
-  /* 이제 0→1 변이 «화면 가로»다. 그 변이 펴진 좌표의 어느 축을 따라가는지로
+
+  /* 0→1 변이 «가로지르는» 변이다. 그 변이 펴진 좌표의 어느 축을 따라가는지로
      장수를 정하고, 그 축의 블록 치수가 «세로»라면 입력칸의 가로·세로를
      바꿔 넣어야 식(구획 실치수 = 장수 × 가로)이 맞는다. */
   var alongX=(cor[1].a!==cor[0].a);
@@ -4289,6 +4335,7 @@ function aFindQuad(img){
     if(p&&isFinite(p.x)&&isFinite(p.y)) snap.push(p);
   }
   return {ok:true,quad:c,nc:nc,nr:nr,snapPts:snap,trusted:trusted,untrust:untrust,swapWH:swapWH,
+          flowSure:flowSure, flowRot:flowRot, flowDeg:flowDeg, rA:rA, rB:rB,
           why:"", mode:R.mode, mmpx:R.mmpx};
 }
 
@@ -5512,7 +5559,18 @@ function aReadPlan(){
     return;
   }
   AM.auto=marks; AM.draw();
-  aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
+  /* ★동선(진행방향)을 «지금 구획»에서 다시 잰다 — 제안 뒤에 사람이 끌어
+     고쳤을 수 있으니 aSug 의 값을 그대로 믿으면 안 된다.
+     0→3 변이 동선이어야 판정 축(hmm·세로)과 맞는다. */
+  var flow=(function(){
+    function L(u,v){ return Math.hypot(Q[v].x-Q[u].x, Q[v].y-Q[u].y); }
+    var rA=Math.max(L(0,1),L(3,2))/Math.max(1e-6,Math.min(L(0,1),L(3,2)));
+    var rB=Math.max(L(0,3),L(1,2))/Math.max(1e-6,Math.min(L(0,3),L(1,2)));
+    var dx=(Q[3].x+Q[2].x)/2-(Q[0].x+Q[1].x)/2, dy=(Q[3].y+Q[2].y)/2-(Q[0].y+Q[1].y)/2;
+    return {deg:Math.round(Math.atan2(dx,Math.abs(dy)||1e-6)*180/Math.PI),
+            rA:rA, rB:rB, sure:Math.max(rA,rB)>1.06, along03:(rB<=rA)};
+  })();
+  aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted, flow:flow,
     pitchInfo:pitchInfo, flare:flare, tac:(function(){ aRes_tac=aTactile(rect); return aRes_tac; })(),
     edge:null, prof:aProfile(rect, hJoints),
     geoBad:geoBad, appR:appR, claimR:claimR,
@@ -5802,12 +5860,32 @@ function aRender(){
     } else {
       html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 편차 '+fx(dmax,1)+'mm / 허용 ±'+aRes.tol+'mm</div></div>';
     }
+    /* ★동선을 «수치로» 보여 준다 — 「앱이 어느 방향을 동선으로 봤나」를
+       사람이 눈으로 대조할 수 있어야 이 규칙이 뜻이 있다. */
+    if(aRes.flow){
+      var fl=aRes.flow;
+      html+='<div class="kv"><span>동선(진행방향)</span><b>'+
+        (fl.sure? ('화면 위아래에서 '+(fl.deg>0?'오른쪽 ':(fl.deg<0?'왼쪽 ':''))+Math.abs(fl.deg)+'° 기움')
+                : '가림 어려움 — 화면 기준으로 봤습니다')+
+        (fl.sure&&!fl.along03? ' <span class="badge b-cau">구획과 어긋남</span>':'')+'</b></div>';
+      if(fl.sure&&!fl.along03)
+        html+='<div class="tiny" style="color:#F5A524;margin:4px 0">⚠ <b>구획의 긴 축이 동선과 어긋나 있습니다</b> — '+
+          '네 모서리를 <b>동선을 따라</b> 잡아 주십시오(가까운 변 → 먼 변). 지금대로면 가로 줄눈을 세로로 착각해 잽니다.</div>';
+      else if(fl.sure&&Math.abs(fl.deg)>25)
+        html+='<div class="tiny" style="color:#F5A524;margin:4px 0">⚠ 동선이 화면에서 <b>'+Math.abs(fl.deg)+'°</b> 기울어 있습니다. '+
+          '보도를 따라 서서 <b>진행방향이 화면 위아래로</b> 오게 찍으면 판독이 훨씬 안정됩니다.</div>';
+    }
     html+='<div class="kv"><span>판정 대상</span><b>세로 줄눈만 (진행방향)</b></div>'+
       '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가로 줄눈은 <b>판정하지 않습니다</b> — 곡선 보도에서는 부챗살처럼 벌어지는 것이, '+
       '엇금 깔기에서는 반 칸씩 어긋나는 것이 <b>맞게 시공한 것</b>이라 통직도의 기준이 될 수 없습니다. '+
       '(가로는 계속 읽되 <b>종단 형상·침하</b> 계산에만 씁니다)</div>';
     html+='<div class="kv"><span>판정 구간</span><b>블록 '+aRes.seg+'장 단위</b></div>';
     html+='<div class="kv"><span>검사한 줄눈</span><b>'+live.length+'구간 (전체 '+aRes.rows.length+')</b></div>';
+    /* ★구획이 작으면 «판정»이 아니라 «표본»이다. 한두 줄로 합격을 내면
+       그 합격이 구간 전체를 대표하는 것처럼 읽힌다. */
+    if(live.length&&live.length<3)
+      html+='<div class="tiny" style="color:#F5A524;margin:4px 0">⚠ <b>줄눈 '+live.length+'개로만 판정했습니다</b> — 구획이 작습니다. '+
+        '이 결과는 그 자리의 표본이지 구간 전체의 판정이 아닙니다. <b>더 가까이·더 넓게</b> 다시 잡아 몇 개 더 보십시오.</div>';
     var detAvg=aRes.rows.reduce(function(a,r){return a+(r.det||0);},0)/(aRes.rows.length||1);
     html+='<div class="kv"><span>줄눈 검출률</span><b>'+fx(detAvg*100,0)+'%</b></div>';
     var curvy=live.filter(function(r){return r.curved!=null&&r.curved>0.8&&r.dmax>aRes.tol;});
