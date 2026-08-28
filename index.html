@@ -298,9 +298,15 @@ details ul{padding-left:18px;margin:7px 0}
   <!-- 규격 — 찍기 «전에» 맞춰야 하는 것이라 사진 바로 밑에 둔다 -->
   <details id="dSpec">
     <summary>⚙ 블록 규격 · 허용값 <span class="stdtag" id="sumSpecTag">— 200×100mm · 줄눈 2±3mm</span></summary>
-    <div class="tiny" style="margin:8px 0">기본값은 <b>보도용 200×100</b>입니다. 300각·점토블록 등 다른 규격이면
-      <b>찍기 전에</b> 고치십시오 — 사진의 축척이 이 값에서 나옵니다.
-      현장정보에 규격을 적어 두면 이 칸이 자동으로 채워집니다.</div>
+    <div class="tiny" style="margin:8px 0">규격이 다르면 <b>찍기 전에</b> 고치십시오 — 사진의 축척이 이 값에서 나옵니다.
+      현장정보에서 <b>포장 종류</b>를 고르면 이 칸이 그 종류의 기본값으로 채워집니다.</div>
+    <label class="lab">자주 쓰는 규격</label>
+    <div class="btnrow" style="flex-wrap:wrap;gap:6px">
+      <button class="btn sec spPre" data-w="200" data-h="100" style="flex:1 1 30%">200×100<br><span class="tiny">인터로킹·점토</span></button>
+      <button class="btn sec spPre" data-w="200" data-h="200" style="flex:1 1 30%">200×200<br><span class="tiny">화강석</span></button>
+      <button class="btn sec spPre" data-w="300" data-h="300" style="flex:1 1 30%">300×300<br><span class="tiny">점자·대형</span></button>
+    </div>
+    <div style="height:9px"></div>
     <div class="grid2">
       <div><label class="lab">블록 가로(mm)</label><input type="number" id="spBw" value="200" /></div>
       <div><label class="lab">블록 세로(mm)</label><input type="number" id="spBh" value="100" /></div>
@@ -2808,7 +2814,7 @@ function loadSite(){
   $("#sSpec").value=s.spec; $("#sMemo").value=s.memo;
   tagSite();
 }
-var APPVER="v3.6.0";
+var APPVER="v3.7.0";
 function tagSite(){
   var s=DB.site;
   $("#siteTag").textContent=(s.name? s.name:"현장 미지정")+" · GSS-QC-BLK "+APPVER;
@@ -4622,6 +4628,55 @@ $("#spLevOk").onclick=function(){
   var el=$(sel); if(el) el.oninput=spSpecTag;
 });
 
+/* ── 포장 종류별 «가장 많이 쓰는» 규격 ─────────────────────────
+   ★화강석은 200×200 이 실제로 제일 많다(2026-08-28 사용자 확인).
+     여기 없으면 사람이 매번 고쳐 넣어야 하고, 안 고치면 축척이
+     통째로 어긋난다 — 오늘 300×300 기본값으로 그 일이 났다.
+   ⚠기본값일 뿐이다. 현장 실측이 다르면 실측이 먼저다. */
+var TYPESPEC={
+  "보차도용 인터로킹블록":[200,100],
+  "점토블록(적벽돌)":[200,100],
+  "화강석 판석·블록":[200,200],
+  "투수블록":[200,100],
+  "시각장애인 유도블록":[300,300]      /* 법정 300mm — 편의법 [별표1] */
+};
+function specDefaults(){
+  var out=[];
+  for(var k in TYPESPEC) out.push(TYPESPEC[k][0]+"×"+TYPESPEC[k][1]);
+  return out;
+}
+/* 규격을 한 번에 밀어 넣는다 — 측점칸·판독칸·「탭 없음」칸이 따로 논다 */
+function setSpec(w,h,quiet){
+  $("#spBw").value=w; $("#spBh").value=h;
+  if($("#aBw")) { $("#aBw").value=w; $("#aBh").value=h; }
+  if($("#uBw")) { $("#uBw").value=w; $("#uBh").value=h; }
+  spSpecTag();
+  if(!quiet) toast("규격 "+w+"×"+h+"mm 로 맞췄습니다");
+}
+$$(".spPre").forEach(function(b){ b.onclick=function(){
+  setSpec(+b.dataset.w, +b.dataset.h);
+};});
+/* 포장 종류를 고르면 그 종류의 기본 규격으로. 손으로 적어 둔 값은 건드리지 않는다
+   (비었거나, 아직 «다른 종류의 기본값» 그대로일 때만 바꾼다). */
+function typeSpecApply(){
+  var t=$("#sType").value, d=TYPESPEC[t];
+  if(!d) return;
+  var cur=($("#sSpec").value||"").trim();
+  var isDefault = !cur || specDefaults().some(function(v){
+    return cur.replace(/\s/g,"").indexOf(v)===0;
+  });
+  if(isDefault){
+    $("#sSpec").value=d[0]+"×"+d[1];
+    setSpec(d[0], d[1], true);
+  }else{
+    /* 손으로 적어 둔 규격이 있으면 그것이 먼저다 — 종류를 바꿨다고
+       사람이 적은 값을 덮어쓰면 안 된다. 측정칸도 그 값을 따라간다.
+       (안 그러면 규격칸엔 150×150, 측정칸엔 200×200 이 남는다) */
+    specFromSite();
+  }
+}
+$("#sType").onchange=typeSpecApply;
+
 /* 현장정보의 「블록 규격」(예 200×100×60) 을 측점 규격칸으로 옮긴다.
    같은 값을 두 군데 적게 하는 것이 헷갈림의 절반이었다. */
 function specFromSite(){
@@ -4783,7 +4838,9 @@ function shotDirBox(){
 ["#shotDirSpot","#shotDirAuto"].forEach(function(sel){
   var el=$(sel); if(el) el.innerHTML=shotDirBox();
 });
-specFromSite(); spSpecTag(); renderChk(); renderSpot();
+/* 현장정보에 적힌 규격이 먼저다. 없으면 «포장 종류»의 기본값으로 채운다. */
+if(!specFromSite()) typeSpecApply();
+spSpecTag(); renderChk(); renderSpot();
 /* ══════════════════════════════════════════════════════════════
    점자블록 = 법이 크기를 못박은 «300mm 자»
    --------------------------------------------------------------
@@ -6194,20 +6251,49 @@ function uRender(){
   var jVert=R.joints.filter(function(j){ return j.dirPhoto==="세로"; });
   var jEdge=jVert.filter(function(j){ return j.edge; });
   var jIn=jVert.filter(function(j){ return !j.edge; });
-  /* ★★가운데 몇 줄만 잰다 — 2026-08-28 사용자 지시.
-       양끝은 경계석·녹지에 닿는 선이라 이미 뺐고, 남은 것 중에서도
-       «가운데»가 가장 안정적이다:
-         · 화면 가운데는 해상도가 제일 좋다(원근으로 가장자리는 뭉갠다)
-         · 렌즈 왜곡이 가장 작다
-         · 포장 가장자리의 마감·쪽돌 영향에서 멀다
-       많이 잰다고 좋은 값이 나오지 않는다 — 가장자리 몇 줄이 산포를 키운다. */
-  var UCENTER=5;
-  var jCenterCut=[];
+  /* ★★«가운데 일정 범위»의 줄눈만 잰다 — 2026-08-28 사용자 지시(2차).
+       1차에서 «배열의 양끝 줄»만 뺐더니 끝선이 또 나왔다. 검출선이 포장
+       밖까지 뻗으면, 한 칸 들어온 줄이 «다시» 경계가 되기 때문이다.
+       개수로 끊으면 이 문제가 안 풀린다 — 자리로 끊어야 한다.
+     → 포장이 실제로 깔린 폭을 «valid» 에서 재고, 그 가운데 UBAND 만
+       판정 구간으로 쓴다. 몇 줄이 나오든 가장자리에는 절대 안 간다.
+       가운데가 해상도도 제일 좋고 렌즈 왜곡도 제일 작다. */
+  var UBAND=0.5, UCENTER=5;
+  var span=(function(){
+    var V=R.valid, W=R.rectData.W, H=R.rectData.H;
+    if(!V) return null;
+    var axis=(pAx? pAx.vertAxis : 0);
+    var n2=(axis===0? W : H), m2=(axis===0? H : W);
+    var cnt=new Float64Array(n2), i2, j2, best=0;
+    for(i2=0;i2<n2;i2++){
+      var c2=0;
+      for(j2=0;j2<m2;j2+=2) c2 += (axis===0? V[j2*W+i2] : V[i2*W+j2]);
+      cnt[i2]=c2; if(c2>best) best=c2;
+    }
+    if(!best) return null;
+    var th=best*0.35, lo=-1, hi=-1;
+    for(i2=0;i2<n2;i2++) if(cnt[i2]>=th){ if(lo<0) lo=i2; hi=i2; }
+    if(lo<0||hi<=lo) return null;
+    return {lo:lo, hi:hi, mid:(lo+hi)/2, w:hi-lo};
+  })();
+  var jCenterCut=[], bandTxt="";
+  if(span){
+    var half=span.w*UBAND/2;
+    var inBand=jIn.filter(function(j){ return Math.abs((j.base||0)-span.mid)<=half; });
+    jCenterCut=jIn.filter(function(j){ return inBand.indexOf(j)<0; });
+    /* 범위 안에 하나도 없으면 범위를 고집하지 않는다 — 아무것도 못 재느니
+       가장 가운데 것 하나라도 보는 편이 낫다(그리고 그렇다고 적는다). */
+    if(inBand.length){ jIn=inBand; bandTxt="가운데 "+Math.round(UBAND*100)+"% 구간"; }
+    else { bandTxt="가운데 "+Math.round(UBAND*100)+"% 안에 줄눈이 없어 가장 가운데 것으로"; 
+           jIn=jIn.slice().sort(function(a,b){
+             return Math.abs((a.base||0)-span.mid)-Math.abs((b.base||0)-span.mid); }).slice(0,1);
+           jCenterCut=[]; }
+  }
   if(jIn.length>UCENTER){
-    var mid=(pAx&&pAx.vertAxis===0? R.rectData.W : R.rectData.H)/2;
+    var mid2=(span? span.mid : (pAx&&pAx.vertAxis===0? R.rectData.W : R.rectData.H)/2);
     var byMid=jIn.slice().sort(function(a,b){
-      return Math.abs((a.base||0)-mid)-Math.abs((b.base||0)-mid); });
-    jCenterCut=byMid.slice(UCENTER);
+      return Math.abs((a.base||0)-mid2)-Math.abs((b.base||0)-mid2); });
+    jCenterCut=jCenterCut.concat(byMid.slice(UCENTER));
     jIn=byMid.slice(0,UCENTER);
   }
   jAll.forEach(function(j){ j.used=false; });
@@ -6259,9 +6345,10 @@ function uRender(){
   }
   if(pAx)
     html+='<div class="kv"><span>판정 대상</span><b>세로 줄눈 '+js.length+'개 <span class="stdtag">(가운데만)</span></b></div>'+
+      (bandTxt? '<div class="kv"><span>판정 범위</span><b>'+bandTxt+'</b></div>':'')+
       (jCenterCut.length? '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가장자리 쪽 '+jCenterCut.length+
-        '줄은 <b>가운데 '+UCENTER+'줄</b>만 쓰려고 뺐습니다 — 화면 가운데가 해상도가 제일 좋고 렌즈 왜곡이 제일 작습니다. '+
-        '많이 잰다고 좋은 값이 나오지 않습니다.</div>' : '')+
+        '줄은 <b>범위 밖</b>이라 뺐습니다 — 포장이 깔린 폭의 <b>가운데 '+Math.round(UBAND*100)+'%</b>만 봅니다. '+
+        '가운데가 해상도가 제일 좋고 렌즈 왜곡도 제일 작습니다. 많이 잰다고 좋은 값이 나오지 않습니다.</div>' : '')+
       '<div class="kv"><span>사진에서 기움</span><b>'+pAx.vertDeg+'°</b></div>'+
       (jEdge.length? '<div class="kv"><span>경계선이라 제외</span><b>'+jEdge.length+'개 '+
         '<span class="stdtag">(양끝 줄 '+jEdge.filter(function(j){return j.endLine;}).length+
