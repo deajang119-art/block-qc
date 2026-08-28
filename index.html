@@ -158,7 +158,7 @@ details ul{padding-left:18px;margin:7px 0}
   <div class="hd">
     <div>
       <div class="t1">블록포장 품질검측</div>
-      <div class="t2" id="siteTag">현장 미지정 · GSS-QC-BLK v1.0</div>
+      <div class="t2" id="siteTag">현장 미지정 · GSS-QC-BLK</div>
     </div>
     <div class="sp"></div>
     <button class="sbtn" id="siteBtn">현장정보</button>
@@ -2609,14 +2609,53 @@ details ul{padding-left:18px;margin:7px 0}
       if (mm2 > 0 && mm2 / mmpx > 0.7 && mm2 / mmpx < 1.43) { mmpx = mm2; R.mmpx = mmpx; }
       R.mmpxRaw = 1 / fit.s;
     }
+    /* ★★줄눈은 «양쪽에 포장이 있어야» 줄눈이다.
+       포장과 흙(식재지·법면)의 «경계»는 사진에서 줄눈처럼 어두운 긴 선으로
+       보이지만, 그 선은 시공선이 아니라 자연 경계라 들쭉날쭉하다.
+       실측(2026-08-28 현장 3): 맨 왼쪽 «줄눈» 하나가 포장-흙 경계를 따라가
+       편차 5.1mm 를 내며 «불량»을 만들었다. 세로선은 멀쩡했는데도.
+       → 선의 좌우 반 칸 자리에 포장이 있는지 세어, 한쪽이라도 비면 «경계»로
+         본다. 지우지는 않는다 — 사람이 왜 빠졌는지 알아야 하므로 표시만 한다.
+       ★그리고 «양끝 줄»은 무조건 뺀다 — 경계석·흙에 닿는 자리라 시공선이
+         아니다(사용자 지시 2026-08-28). endLine 으로 따로 표시한다. */
+    function flanked(pos, axis, half){
+      var lo=0, hi=0, n2=0;
+      var span = (axis===0)? rect.H : rect.W;
+      function at(x,y){
+        x=Math.round(x); y=Math.round(y);
+        return (x>=0&&y>=0&&x<rect.W&&y<rect.H)? valid[y*rect.W+x] : 0;
+      }
+      for (var t=0.1; t<0.9; t+=0.04){
+        var u=span*t, a=pos-half, b=pos+half;
+        lo += (axis===0? at(a,u) : at(u,a));
+        hi += (axis===0? at(b,u) : at(u,b));
+        n2++;
+      }
+      if (!n2) return {ok:true, lo:1, hi:1};
+      lo/=n2; hi/=n2;
+      return {ok:(lo>=0.55&&hi>=0.55), lo:lo, hi:hi};
+    }
+    var halfX=(fit&&fit.Tx? fit.Tx:20)/2, halfY=(fit&&fit.Ty? fit.Ty:20)/2;
     var joints = [];
     for (i = 0; i < lx.length; i++) {
       var s1 = straightness(dlV, valid, rect.W, rect.H, lx[i], 0, mmpx);
-      if (s1) { s1.dir = "세로"; joints.push(s1); }
+      if (s1) {
+        var f1=flanked(lx[i], 0, halfX);
+        var end1=(i===0||i===lx.length-1);
+        s1.dir = "세로"; s1.edge = (!f1.ok||end1); s1.endLine = end1;
+        s1.pave = [+f1.lo.toFixed(2), +f1.hi.toFixed(2)];
+        joints.push(s1);
+      }
     }
     for (i = 0; i < ly.length; i++) {
       var s2 = straightness(dlH, valid, rect.W, rect.H, ly[i], 1, mmpx);
-      if (s2) { s2.dir = "가로"; joints.push(s2); }
+      if (s2) {
+        var f2=flanked(ly[i], 1, halfY);
+        var end2=(i===0||i===ly.length-1);
+        s2.dir = "가로"; s2.edge = (!f2.ok||end2); s2.endLine = end2;
+        s2.pave = [+f2.lo.toFixed(2), +f2.hi.toFixed(2)];
+        joints.push(s2);
+      }
     }
     R.joints = joints;
     R.lines = { x: lx, y: ly };
@@ -2769,9 +2808,10 @@ function loadSite(){
   $("#sSpec").value=s.spec; $("#sMemo").value=s.memo;
   tagSite();
 }
+var APPVER="v3.6.0";
 function tagSite(){
   var s=DB.site;
-  $("#siteTag").textContent=(s.name? s.name:"현장 미지정")+" · GSS-QC-BLK v1.0";
+  $("#siteTag").textContent=(s.name? s.name:"현장 미지정")+" · GSS-QC-BLK "+APPVER;
 }
 $("#sSave").onclick=function(){
   DB.site={name:$("#sName").value.trim(),loc:$("#sLoc").value.trim(),date:$("#sDate").value,
@@ -3701,7 +3741,7 @@ $("#recPrint").onclick=function(){
     "figcaption{font-size:8.5pt;color:#444;margin-top:3px}"+
     ".box{border:1px solid #888;padding:8px 10px;font-size:9.5pt;margin-bottom:12px;background:#F6F9FC}"+
     "@media print{@page{size:A4;margin:14mm}}</style></head><body>"+
-    "<h1>블록포장 품질검측 결과</h1><div class='sub'>GSS-QC-BLK v1.0 · 출력 "+nowStr()+"</div>"+
+    "<h1>블록포장 품질검측 결과</h1><div class='sub'>GSS-QC-BLK "+APPVER+" · 출력 "+nowStr()+"</div>"+
     "<table><tr><th>현장</th><td class='l'>"+(s.name||"")+"</td><th>검측일</th><td>"+(s.date||"")+"</td></tr>"+
     "<tr><th>검측 위치</th><td class='l'>"+(s.loc||"")+"</td><th>검측자</th><td>"+(s.who||"")+"</td></tr>"+
     "<tr><th>포장 종류</th><td class='l'>"+(s.type||"")+"</td><th>블록 규격</th><td>"+(s.spec||"")+"</td></tr>"+
@@ -4612,6 +4652,11 @@ $("#spFile").onchange=function(e){
       AM.img=im;
       /* 측점 입력값을 판독 입력칸으로 옮긴다 — 계산은 그쪽 코드를 그대로 쓴다 */
       $("#aBw").value=$("#spBw").value; $("#aBh").value=$("#spBh").value;
+      /* ⚠「평면·자동(탭 없음)」은 «자기 규격칸»을 쓴다. 여기에 안 옮기면
+         기본값 300×300 이 조용히 쓰인다 — 실측에서 200×100 바닥을
+         정사각 격자로 잡아 값이 통째로 어긋났다(2026-08-28 현장 3). */
+      $("#uBw").value=$("#spBw").value; $("#uBh").value=$("#spBh").value;
+      $("#uJt").value=$("#spBj").value; $("#uTol").value=$("#spTol").value;
       $("#aBj").value=$("#spBj").value; $("#aTol").value=$("#spTol").value;
       $("#aPos").value=spTitle();
       setTimeout(spClassify,30);
@@ -6054,8 +6099,67 @@ function uRun(){
         joint:(+$("#uJt").value||0), f35:uF35, frac:(+$("#uFrac").value||55)/100
       });
     }catch(err){ R={ok:false,why:"판독 중 오류: "+err.message}; }
+    R.srcW=full.W;           // 펴는 좌표 → 사진 좌표 환산용
     uRes=R; uRender();
   },40);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ★결과는 «넣은 사진과 같은 방향»으로 말한다 — 2026-08-28 사용자 지시.
+     「너가 분석할 때는 네 마음대로 해도, 결과를 줄 때는 입력값과 같은
+      자료에서 표현해줘.」
+     펴는 좌표(rect)의 x·y 가 사진에서 어느 쪽으로 뻗는지는 사진마다
+     다르다. 속으로 어떻게 펴든, 사람에게는 «사진에서 세로/가로»로
+     적어야 대조가 된다.
+══════════════════════════════════════════════════════════════ */
+function uPhotoAxes(R){
+  var rd=R&&R.rectData; if(!rd||!rd.Hf) return null;
+  var Hi=BlockAutoCore.inv3(rd.Hf); if(!Hi) return null;
+  var W=rd.W, H=rd.H;
+  function toImg(x,y){
+    var q=BlockAutoCore.mulv3(Hi,[x,y,1]);
+    return (q&&Math.abs(q[2])>1e-9)? [q[0]/q[2], q[1]/q[2]] : null;
+  }
+  function tilt(a,b){                       // 0° = 사진에서 위아래(세로)
+    if(!a||!b) return null;
+    var d=Math.abs(Math.atan2(b[0]-a[0], b[1]-a[1])*180/Math.PI);
+    return Math.min(d, 180-d);
+  }
+  /* axis 0 = rect 의 x 가 일정한 선 → y 를 따라 뻗는다
+     axis 1 = rect 의 y 가 일정한 선 → x 를 따라 뻗는다 */
+  var t0=tilt(toImg(W/2,H*0.2), toImg(W/2,H*0.8));
+  var t1=tilt(toImg(W*0.2,H/2), toImg(W*0.8,H/2));
+  if(t0==null||t1==null) return null;
+  return {toImg:toImg, t0:t0, t1:t1,
+          vertAxis:(t0<=t1? 0:1), vertDeg:Math.round(Math.min(t0,t1))};
+}
+
+/* 넣은 사진 그대로 위에 «판정한 줄눈»을 얹는다.
+   펴진 그림은 앱이 속으로 쓰는 그림이라 방향이 뒤집혀 보일 수 있다.
+   사람이 대조하는 그림은 «자기가 찍은 사진»이어야 한다. */
+function uDrawOnPhoto(){
+  var R=uRes, cv=document.getElementById("uCvPhoto"), img=AM.img;
+  if(!cv||!R||!img||!R.rectData) return;
+  var pa=uPhotoAxes(R); if(!pa) return;
+  var sc=img.width/R.srcW;          // 축소본 → 원본 사진
+  var k=Math.min(1, 1000/img.width);
+  cv.width=Math.round(img.width*k); cv.height=Math.round(img.height*k);
+  var cx=cv.getContext("2d");
+  cx.drawImage(img,0,0,cv.width,cv.height);
+  cx.fillStyle="rgba(8,16,28,.45)"; cx.fillRect(0,0,cv.width,cv.height);
+  function P(x,y){ var q=pa.toImg(x,y); return q? [q[0]*sc*k, q[1]*sc*k] : null; }
+  R.joints.forEach(function(j){
+    var judged=(j.axis===pa.vertAxis) && !j.edge && j.used!==false;
+    cx.fillStyle = judged
+      ? (j.clear? "rgba(126,226,176,.95)" : "rgba(245,165,36,.9)")
+      : (j.edge? "rgba(190,120,200,.55)" : "rgba(120,145,170,.35)");
+    var r = judged? 2.2 : 1.2;
+    for(var i=0;i<j.cs.length;i+=2){
+      var q = (j.axis===0)? P(j.cs[i], j.us[i]) : P(j.us[i], j.cs[i]);
+      if(q) cx.fillRect(q[0]-r/2, q[1]-r/2, r, r);
+    }
+  });
+  return true;
 }
 
 function uRender(){
@@ -6079,7 +6183,47 @@ function uRender(){
     $("#uAgain").onclick=function(){ aReset(); };
     return;
   }
-  var js=R.joints.slice().sort(function(a,b){return b.dmaxSig-a.dmaxSig;});
+  /* ★사진 기준으로 이름을 다시 붙이고, «세로»만 판정한다.
+     가로 줄눈은 곡선 보도에서 부챗살로 벌어지고 엇금 깔기에서 반 칸씩
+     어긋나는 것이 맞게 시공한 것이라 통직도의 기준이 될 수 없다. */
+  var pAx=uPhotoAxes(R);
+  R.joints.forEach(function(j){
+    j.dirPhoto = pAx? (j.axis===pAx.vertAxis? "세로":"가로") : j.dir;
+  });
+  var jAll=R.joints.slice();
+  var jVert=R.joints.filter(function(j){ return j.dirPhoto==="세로"; });
+  var jEdge=jVert.filter(function(j){ return j.edge; });
+  var jIn=jVert.filter(function(j){ return !j.edge; });
+  /* ★★가운데 몇 줄만 잰다 — 2026-08-28 사용자 지시.
+       양끝은 경계석·녹지에 닿는 선이라 이미 뺐고, 남은 것 중에서도
+       «가운데»가 가장 안정적이다:
+         · 화면 가운데는 해상도가 제일 좋다(원근으로 가장자리는 뭉갠다)
+         · 렌즈 왜곡이 가장 작다
+         · 포장 가장자리의 마감·쪽돌 영향에서 멀다
+       많이 잰다고 좋은 값이 나오지 않는다 — 가장자리 몇 줄이 산포를 키운다. */
+  var UCENTER=5;
+  var jCenterCut=[];
+  if(jIn.length>UCENTER){
+    var mid=(pAx&&pAx.vertAxis===0? R.rectData.W : R.rectData.H)/2;
+    var byMid=jIn.slice().sort(function(a,b){
+      return Math.abs((a.base||0)-mid)-Math.abs((b.base||0)-mid); });
+    jCenterCut=byMid.slice(UCENTER);
+    jIn=byMid.slice(0,UCENTER);
+  }
+  jAll.forEach(function(j){ j.used=false; });
+  jIn.forEach(function(j){ j.used=true; });
+  var js=jIn.sort(function(a,b){return b.dmaxSig-a.dmaxSig;});
+  if(!js.length){
+    html+='<div class="vd ng"><div class="v1">판독 실패</div><div class="v2">'+
+      (jEdge.length? '세로 줄눈이 «경계선»뿐이었습니다':'세로(진행방향) 줄눈을 못 찾았습니다')+'</div></div>';
+    html+='<div class="tiny" style="margin-top:8px">앱은 <b>진행방향으로 뻗는 줄눈만</b> 판정합니다. '+
+          '보도를 따라 서서 <b>진행방향이 화면 위아래로</b> 오게 다시 찍어 주십시오. '+
+          '엇금(벽돌형) 깔기라 세로 줄눈이 반 칸씩 끊겨 있으면 이 자리는 사진으로 못 잽니다.</div>';
+    html+='<div class="btnrow" style="margin-top:10px"><button class="btn sec" id="uAgain">다시</button></div>';
+    $("#uResBox").innerHTML=html; $("#uStep3").classList.remove("hide");
+    $("#uAgain").onclick=function(){ aReset(); };
+    return;
+  }
   var clear=js.filter(function(j){return j.clear;});
   var lim=js.map(function(j){return j.limit;}).sort(function(a,b){return a-b;});
   var limMid=lim.length?lim[lim.length>>1]:0;
@@ -6113,6 +6257,24 @@ function uRender(){
           '±'+tol+'mm 판정에는 부족합니다. <b>지금보다 '+fx(need,1)+'배 가까이</b> 찍으면 가려집니다'+
           '(화면에 담기는 블록 수를 '+fx(need,1)+'분의 1로).</div>';
   }
+  if(pAx)
+    html+='<div class="kv"><span>판정 대상</span><b>세로 줄눈 '+js.length+'개 <span class="stdtag">(가운데만)</span></b></div>'+
+      (jCenterCut.length? '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가장자리 쪽 '+jCenterCut.length+
+        '줄은 <b>가운데 '+UCENTER+'줄</b>만 쓰려고 뺐습니다 — 화면 가운데가 해상도가 제일 좋고 렌즈 왜곡이 제일 작습니다. '+
+        '많이 잰다고 좋은 값이 나오지 않습니다.</div>' : '')+
+      '<div class="kv"><span>사진에서 기움</span><b>'+pAx.vertDeg+'°</b></div>'+
+      (jEdge.length? '<div class="kv"><span>경계선이라 제외</span><b>'+jEdge.length+'개 '+
+        '<span class="stdtag">(양끝 줄 '+jEdge.filter(function(j){return j.endLine;}).length+
+        ' · 한쪽에 포장이 없음 '+jEdge.filter(function(j){return !j.endLine;}).length+')</span></b></div>'+
+        '<div class="tiny" style="margin:2px 0 6px;opacity:.85">양끝 줄은 <b>경계석·흙에 닿는 자리</b>라 시공선이 아닙니다. '+
+        '포장과 흙의 경계는 사진에서 줄눈처럼 어둡게 보이지만 자연 경계라 들쭉날쭉합니다 — '+
+        '그걸 재면 멀쩡한 바닥이 «불량»으로 나옵니다.</div>' : '')+
+      '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가로 줄눈 '+(jAll.length-jVert.length)+'개는 <b>판정하지 않았습니다</b> — '+
+      '곡선 보도에서는 부챗살처럼 벌어지는 것이, 엇금 깔기에서는 반 칸씩 어긋나는 것이 <b>맞게 시공한 것</b>이라 '+
+      '통직도의 기준이 될 수 없습니다. 아래 그림에 <b>흐린 점</b>으로만 보여 둡니다.</div>';
+  if(pAx&&pAx.vertDeg>25)
+    html+='<div class="tiny" style="color:#F5A524;margin:6px 0">⚠ 진행방향이 사진에서 <b>'+pAx.vertDeg+'°</b> 기울어 있습니다. '+
+      '보도를 따라 서서 <b>진행방향이 화면 위아래로</b> 오게 찍으면 판독이 훨씬 안정됩니다.</div>';
   html+='<div class="kv"><span>축척</span><b>'+fx(R.mmpx,3)+' mm/화소</b></div>';
   html+='<div class="kv"><span>가름한계(중앙)</span><b>±'+fx(limMid,1)+'mm</b></div>';
   html+='<div class="kv"><span>줄눈</span><b>'+js.length+'개 (가릴 수 있는 것 '+clear.length+'개)</b></div>';
@@ -6134,25 +6296,35 @@ function uRender(){
   js.slice(0,14).forEach(function(j){
     var st = !j.clear ? "잡음에 묻힘" : (j.dmaxSig>tol ? "초과" : "이내");
     var c  = !j.clear ? "" : (j.dmaxSig>tol ? "ng" : "ok");
-    html+='<tr><td>'+j.dir+'</td><td>'+fx(j.det*100,0)+'%</td>'+
+    html+='<tr><td>'+(j.dirPhoto||j.dir)+'</td><td>'+fx(j.det*100,0)+'%</td>'+
           '<td><b>'+fx(j.dmaxSig,1)+'</b></td><td>±'+fx(j.noise,1)+'</td>'+
           '<td class="'+c+'">'+st+'</td></tr>';
   });
   html+='</table>';
-  html+='<div style="height:10px"></div><div class="small"><b>펴진 그림</b> — 빨강·하늘색이 찾은 줄눈입니다</div>';
-  html+='<canvas id="uCv" style="width:100%;border-radius:8px;margin-top:6px"></canvas>';
+  /* ★넣은 사진을 먼저 보여 준다 — 사람이 대조하는 그림은 «자기가 찍은 사진»이어야 한다.
+     펴진 그림은 앱이 속으로 쓰는 그림이라 방향이 뒤집혀 보일 수 있어 참고로 내린다. */
+  html+='<div style="height:10px"></div><div class="small"><b>넣은 사진 위에</b> — '+
+        '<span style="color:#7EE2B0">초록</span>=판정한 세로 줄눈 · '+
+        '<span style="color:#F5A524">주황</span>=잡음에 묻힘 · '+
+        '<span style="color:#BE78C8">보라</span>=경계선(제외) · '+
+        '<span style="color:#8FA9C4">흐림</span>=가로(판정 안 함)</div>';
+  html+='<canvas id="uCvPhoto" style="width:100%;border-radius:8px;margin-top:6px"></canvas>';
+  html+='<div style="height:10px"></div><details><summary>펴진 그림 (앱이 속으로 쓰는 그림)</summary>'+
+        '<div class="tiny" style="margin:6px 0">원근을 편 그림입니다. <b>방향이 사진과 다를 수 있습니다</b> — '+
+        '격자가 줄눈에 제대로 얹혔는지 확인할 때만 보십시오. 빨강·하늘색이 찾은 줄눈입니다.</div>'+
+        '<canvas id="uCv" style="width:100%;border-radius:8px;margin-top:6px"></canvas></details>';
   html+='<div class="btnrow" style="margin-top:10px"><button class="btn" id="uSave">기록 저장</button>'+
         '<button class="btn sec" id="uAgain">다시</button></div>';
   html+='<div class="tiny" style="margin-top:8px">자동판독은 <b>1차 선별</b>입니다. '+
         '「잡음에 묻힘」은 <b>합격이 아니라 판정 유보</b>입니다 — 더 가까이 찍거나 현장 실측으로 확인하십시오.</div>';
   $("#uResBox").innerHTML=html;
   $("#uStep3").classList.remove("hide");
-  uDrawRect();
+  uDrawOnPhoto(); uDrawRect();
   var rec={tool:"자동판독·줄눈(탭없음)", pos:$("#aPos").value||DB.site.loc, grade:grade,
     main:fx(maxD,1)+"mm", std:"±"+tol+"mm",
-    detail:"줄눈 "+js.length+"개(가릴 수 있는 것 "+clear.length+") / 가름한계 ±"+fx(limMid,1)+
+    detail:"세로 줄눈 "+js.length+"개(가릴 수 있는 것 "+clear.length+") / 가름한계 ±"+fx(limMid,1)+
            "mm / 해상도 "+fx(R.mmpx,3)+"mm·화소⁻¹"+(R.f35?" / f35 "+R.f35+"mm":""),
-    photo:$("#uCv")?$("#uCv").toDataURL("image/jpeg",0.72):null};
+    photo:($("#uCvPhoto")||$("#uCv"))? ($("#uCvPhoto")||$("#uCv")).toDataURL("image/jpeg",0.72):null};
   $("#uSave").onclick=function(){ addRec(rec); toast("✔ 기록에 저장했습니다"); go("rec"); };
   $("#uAgain").onclick=function(){ aReset(); };
 }
