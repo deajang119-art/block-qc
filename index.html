@@ -2814,7 +2814,7 @@ function loadSite(){
   $("#sSpec").value=s.spec; $("#sMemo").value=s.memo;
   tagSite();
 }
-var APPVER="v3.7.0";
+var APPVER="v3.7.1";
 function tagSite(){
   var s=DB.site;
   $("#siteTag").textContent=(s.name? s.name:"현장 미지정")+" · GSS-QC-BLK "+APPVER;
@@ -6258,7 +6258,13 @@ function uRender(){
      → 포장이 실제로 깔린 폭을 «valid» 에서 재고, 그 가운데 UBAND 만
        판정 구간으로 쓴다. 몇 줄이 나오든 가장자리에는 절대 안 간다.
        가운데가 해상도도 제일 좋고 렌즈 왜곡도 제일 작다. */
-  var UBAND=0.5, UCENTER=5;
+  /* ⚠UDET 을 0.90 으로 두었다가 되돌렸다 — 두 가지가 틀렸다.
+       ① 검출률이 좋고 나쁨을 가르지 못한다: 이 현장에서 95%가 3.8mm,
+          90%가 0.5mm 였다. 오히려 반대였다.
+       ② 화면에는 반올림해서 「90%」로 보이는데 실제는 0.895 라, 사람이 보는
+          값과 문턱이 어긋나 «왜 빠졌는지 알 수 없게» 된다.
+     → 앱이 이미 쓰는 «판독불가» 문턱(0.6)만 남긴다. 고르는 기준은 «자리»다. */
+  var UBAND=0.6, UCENTER=3, UDET=0.60;
   var span=(function(){
     var V=R.valid, W=R.rectData.W, H=R.rectData.H;
     if(!V) return null;
@@ -6276,26 +6282,52 @@ function uRender(){
     if(lo<0||hi<=lo) return null;
     return {lo:lo, hi:hi, mid:(lo+hi)/2, w:hi-lo};
   })();
-  var jCenterCut=[], bandTxt="";
-  if(span){
-    var half=span.w*UBAND/2;
-    var inBand=jIn.filter(function(j){ return Math.abs((j.base||0)-span.mid)<=half; });
-    jCenterCut=jIn.filter(function(j){ return inBand.indexOf(j)<0; });
-    /* 범위 안에 하나도 없으면 범위를 고집하지 않는다 — 아무것도 못 재느니
-       가장 가운데 것 하나라도 보는 편이 낫다(그리고 그렇다고 적는다). */
-    if(inBand.length){ jIn=inBand; bandTxt="가운데 "+Math.round(UBAND*100)+"% 구간"; }
-    else { bandTxt="가운데 "+Math.round(UBAND*100)+"% 안에 줄눈이 없어 가장 가운데 것으로"; 
-           jIn=jIn.slice().sort(function(a,b){
-             return Math.abs((a.base||0)-span.mid)-Math.abs((b.base||0)-span.mid); }).slice(0,1);
-           jCenterCut=[]; }
-  }
-  if(jIn.length>UCENTER){
-    var mid2=(span? span.mid : (pAx&&pAx.vertAxis===0? R.rectData.W : R.rectData.H)/2);
-    var byMid=jIn.slice().sort(function(a,b){
-      return Math.abs((a.base||0)-mid2)-Math.abs((b.base||0)-mid2); });
-    jCenterCut=jCenterCut.concat(byMid.slice(UCENTER));
-    jIn=byMid.slice(0,UCENTER);
-  }
+  /* ★★«몇 개 없어도 안정적으로 가운데만» — 2026-08-28 사용자 지시(3차).
+     세 가지를 한 번에 건다. 순서가 중요하다.
+       ① 자리  — 포장 폭의 가운데 UBAND 안에 있을 것  ← 이것이 본 규칙이다
+       ② 품질  — 아예 못 읽은 줄(검출률 UDET 미만)만 뺀다
+       ③ 개수  — 가운데에서 가까운 순으로 UCENTER 개까지
+     ⚠«검출률이 높으면 좋은 줄»이 아니다 — 실측에서 95%가 3.8mm,
+       90%가 0.5mm 였다. 품질로 고르려다 오히려 나쁜 줄을 뽑았다.
+       고르는 기준은 «자리»다.
+     ⚠어느 단계든 다 걸러지면 그 단계는 «완화»하고, 완화했다고 화면에 적는다.
+       아무것도 못 재느니 낫지만, 몰래 하면 안 된다. */
+  var jCenterCut=[], bandTxt="", relax=[];
+  var mid2=(span? span.mid : (pAx&&pAx.vertAxis===0? R.rectData.W : R.rectData.H)/2);
+  /* ⚠j.base 는 [절편, 기울기] «배열»이다. 숫자처럼 쓰면 NaN 이 되어
+       모든 줄눈이 «범위 밖»으로 떨어진다(그렇게 조용히 헛돌고 있었다).
+       자리는 공칭 위치 j.at 을 쓴다. */
+  function jpos(j){ return (j&&typeof j.at==="number")? j.at : 0; }
+  function byMid(a,b){ return Math.abs(jpos(a)-mid2)-Math.abs(jpos(b)-mid2); }
+  (function(){
+    var pool=jIn.slice();
+    /* ① 자리 */
+    if(span){
+      var half=span.w*UBAND/2;
+      var inB=pool.filter(function(j){ return Math.abs(jpos(j)-span.mid)<=half; });
+      if(inB.length) pool=inB;
+      else {
+        /* ★범위가 비면 «전부 살리는» 것이 아니라 «가장 가운데 하나»를 쓴다.
+           전부 살리면 바깥 줄이 뽑혀 오히려 나빠진다(실측에서 그랬다). */
+        pool=pool.slice().sort(byMid).slice(0,1);
+        relax.push("가운데 "+Math.round(UBAND*100)+"% 안에 줄눈이 없어 가장 가운데 것 하나만 썼습니다");
+      }
+    }
+    /* ② 품질 — «못 읽은 줄»만 뺀다. 좋고 나쁨을 여기서 가리지 않는다. */
+    var good=pool.filter(function(j){ return (j.det||0)>=UDET; });
+    if(good.length) pool=good;
+    else {
+      var best=pool.slice().sort(function(a,b){ return (b.det||0)-(a.det||0); })[0];
+      if(best){ pool=[best];
+        relax.push("검출률이 "+Math.round(UDET*100)+"%에 못 미쳐 가장 잘 잡힌 것("+
+                   Math.round((best.det||0)*100)+"%) 하나만 썼습니다"); }
+    }
+    /* ③ 개수 — 가운데에서 가까운 순 */
+    pool.sort(byMid);
+    jCenterCut=jIn.filter(function(j){ return pool.slice(0,UCENTER).indexOf(j)<0; });
+    jIn=pool.slice(0,UCENTER);
+    bandTxt="포장 폭 가운데 "+Math.round(UBAND*100)+"% 안에서, 가운데에 가까운 순으로 최대 "+UCENTER+"줄";
+  })();
   jAll.forEach(function(j){ j.used=false; });
   jIn.forEach(function(j){ j.used=true; });
   var js=jIn.sort(function(a,b){return b.dmaxSig-a.dmaxSig;});
@@ -6345,7 +6377,8 @@ function uRender(){
   }
   if(pAx)
     html+='<div class="kv"><span>판정 대상</span><b>세로 줄눈 '+js.length+'개 <span class="stdtag">(가운데만)</span></b></div>'+
-      (bandTxt? '<div class="kv"><span>판정 범위</span><b>'+bandTxt+'</b></div>':'')+
+      (bandTxt? '<div class="kv"><span>고르는 규칙</span><b>'+bandTxt+'</b></div>':'')+
+      (relax.length? '<div class="tiny" style="color:#F5A524;margin:2px 0 6px">⚠ '+relax.join(' · ')+'.</div>':'')+
       (jCenterCut.length? '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가장자리 쪽 '+jCenterCut.length+
         '줄은 <b>범위 밖</b>이라 뺐습니다 — 포장이 깔린 폭의 <b>가운데 '+Math.round(UBAND*100)+'%</b>만 봅니다. '+
         '가운데가 해상도가 제일 좋고 렌즈 왜곡도 제일 작습니다. 많이 잰다고 좋은 값이 나오지 않습니다.</div>' : '')+
