@@ -3787,7 +3787,7 @@ function aStd(){
       '<div class="kv"><span>줄눈 폭</span><b>표준 '+STD.jointWidth.std+'mm · 상한 '+STD.jointWidth.max+'mm</b></div>'+
       '<div class="kv"><span>근거</span><b class="stdtag">'+STD.jointWidth.src+' / '+STD.jointLine.src+'</b></div>';
     $("#aShoot").innerHTML="촬영 요령 — ⓪ <b>300각처럼 큰 블록은 팔을 뻗어 높이 들고 완만하게</b> 찍으십시오 "+
-      "(눈높이에서 비스듬히 찍으면 깊이 쪽에 한 장 반밖에 안 담겨 격자를 못 잡습니다) ① 구획 <b>네 모서리가 모두</b> 화면에 들어오게 — 길게 담아도 됩니다(줄눈마다 정밀도를 따로 알려줍니다) ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 초광각만 피하십시오</b> — 원근은 네 모서리로 정확히 펴지만, 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로.";
+      "(눈높이에서 비스듬히 찍으면 깊이 쪽에 한 장 반밖에 안 담겨 격자를 못 잡습니다) <b>★진행방향이 사진에서 «세로»로 오게</b> — 줄눈은 세로로 뻗은 것만 판정합니다 ① 구획 <b>네 모서리가 모두</b> 화면에 들어오게 — 길게 담아도 됩니다(줄눈마다 정밀도를 따로 알려줍니다) ② 줄눈이 <b>4화소 이상</b> 굵게 찍히도록 가까이(4,000화소 사진 기준 <b>가로 2m 이내</b>, 줄눈 폭까지 보려면 <b>1.4m 이내</b>) ③ 비스듬해도 됩니다 — 네 모서리로 자동 보정합니다 ④ <b>0.5× 초광각만 피하십시오</b> — 원근은 네 모서리로 정확히 펴지만, 렌즈가 만든 휨은 못 폅니다. 1× 기본 렌즈로.";
   }else{
     var f=aKind==="flat";
     $("#aIntro").innerHTML="<b>측면 자동판독</b> — 직선자를 대고 <b>옆에서</b> 찍습니다. 자가 길이 기준이 되어 자 밑 틈을 mm로 읽습니다. 사진 한 장으로 높이를 재는 유일한 방법입니다.";
@@ -5351,7 +5351,9 @@ function aReadPlan(){
   var back=aBack(rect), rows=[], marks=[], inverted=false;
   /* ①② 재는 김에 같이 나오는 것 — 줄눈이 벌어지는 «자리»와 블록 낱장 편차 */
   var pitchInfo=[], flare=[], hJoints=null;
-  function run(axis){
+  /* judge=false 면 스캔만 하고 판정에는 안 담는다.
+     가로 줄눈이 그렇다 — 판정에는 못 쓰지만 종단 형상(침하)이 그 잔차에서 나온다. */
+  function run(axis, judge){
     var along = axis==="h" ? W : H;      // 줄눈이 뻗는 방향의 블록 치수
     var acr   = axis==="h" ? H : W;      // 줄눈이 늘어서는 방향
     var cnt   = axis==="h" ? nr-1 : nc-1;
@@ -5378,7 +5380,9 @@ function aReadPlan(){
         var sd=Math.sqrt(vs.reduce(function(a,b){return a+(b-m)*(b-m);},0)/vs.length);
         var wo=vs.map(function(v,k){return {d:v-m, i:pit[k].i};})
                  .sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d);})[0];
-        pitchInfo.push({dir:axis==="h"?"세로":"가로", nominal:(axis==="h"?H:W)+J,
+        /* ⚠여기 dir 은 «줄눈이 뻗는 방향»이 아니라 «칸이 늘어서는 방향»이다.
+             rows·flare 의 dir 과 반대말이 되어 한 화면에서 부딪쳤다 — 낱말을 갈라 둔다. */
+        if(judge) pitchInfo.push({dir:(axis==="h"?"세로":"가로")+" 방향 칸", nominal:(axis==="h"?H:W)+J,
                         n:vs.length, avg:m, sd:sd, worst:wo});
       }
     })();
@@ -5424,9 +5428,10 @@ function aReadPlan(){
         for(t=0;t<ps.length;t++){ var a=ps[t].s-sm, b=ps[t].wg-wm; sxx+=a*a; sxy+=a*b; }
         var slope = sxx>1e-9 ? sxy/sxx : 0;          // mm 폭 / mm 거리
         var top=ps.slice().sort(function(a,b){return b.wg-a.wg;})[0];
-        flare.push({dir:axis==="h"?"가로":"세로", no:i+1,
+        if(judge) flare.push({dir:axis==="h"?"가로":"세로", no:i+1,
                     slope1m:slope*1000, at:top.s, wmax:top.wg-2*cham, avg:wm-2*cham});
       })();
+      if(!judge) return;
       segs.forEach(function(r,k){
         if(r.skip) return;
         rows.push({dir:axis==="h"?"가로":"세로", no:i+1, seg:k+1, nseg:segs.length,
@@ -5438,9 +5443,23 @@ function aReadPlan(){
       });
     });
   }
-  run("h");
-  if(aPat==="stack") run("v");
-  if(!rows.length){ toast("줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요"); return; }
+  /* ★★줄눈 판정은 «세로»(사진에서 진행방향·깊이로 뻗는 줄눈)만 한다 — 2026-08-28 확정.
+       가로 줄눈은 판정의 기준이 될 수 없다:
+         · 곡선 보도에서는 부챗살처럼 벌어지는 것이 «맞게» 시공한 것이다
+         · 엇금(벽돌형) 깔기에서는 반 칸씩 어긋나는 것이 «맞게» 깐 것이다
+       곧아야 하는 선은 진행방향 줄눈이다. 그래서 그것만 잰다.
+     ⚠가로도 «스캔»은 계속한다 — 종단 형상(침하)이 가로 줄눈의 잔차에서 나오기 때문이다.
+       판정에만 안 담는다. */
+  run("h", false);          // 형상용 — 판정 밖
+  run("v", true);           // ★판정용 (세로)
+  if(!rows.length){
+    /* 세로 줄눈을 못 찾는 흔한 까닭 = 엇금 깔기라 반 칸씩 끊겨 있다.
+       그러면 «못 잰다»고 말해야 한다 — 가로로 슬쩍 갈아타면 안 된다. */
+    toast(aPat==="run"
+      ? "세로 줄눈을 못 찾았습니다 — 엇금 깔기라 끊겨 있을 수 있습니다"
+      : "줄눈을 찾지 못했습니다 — 블록 장수·규격을 확인하세요");
+    return;
+  }
   AM.auto=marks; AM.draw();
   aRes={kind:"plan", rows:rows, tol:tol, seg:seg, J:J, wOK:wOK, inverted:inverted,
     pitchInfo:pitchInfo, flare:flare, tac:(function(){ aRes_tac=aTactile(rect); return aRes_tac; })(),
@@ -5724,10 +5743,18 @@ function aRender(){
     }
     if(!live.length){
       html+='<div class="vd ng"><div class="v1">판독 실패</div><div class="v2">줄눈을 제대로 찾지 못했습니다</div></div>';
-      html+='<div class="tiny" style="margin:8px 0">아래를 확인하십시오 — ① <b>구획 네 모서리</b>가 블록 모서리에 정확히 찍혔는지 ② <b>블록 장수</b>가 네 모서리 안에 온전히 든 개수인지 ③ <b>블록 가로·세로</b>가 구획의 가로·세로 방향과 맞는지(90° 돌아가면 전부 어긋납니다) ④ 줄눈이 사진에서 충분히 구분되는지.</div>';
+      html+='<div class="tiny" style="margin:8px 0">앱은 <b>세로 줄눈(진행방향)</b>만 판정합니다. 아래를 확인하십시오 — '+
+        '① <b>진행방향이 사진에서 세로로</b> 오게 찍었는지 (가로로 누워 있으면 잴 것이 없습니다) '+
+        '② <b>엇금 깔기</b>라 세로 줄눈이 반 칸씩 끊겨 있지는 않은지 — 그렇다면 이 자리는 사진으로 못 잽니다 '+
+        '③ <b>구획 네 모서리</b>가 블록 모서리에 정확히 찍혔는지 ④ <b>블록 장수</b>가 네 모서리 안에 온전히 든 개수인지 '+
+        '⑤ <b>블록 가로·세로</b>가 구획의 가로·세로와 맞는지(90° 돌아가면 전부 어긋납니다).</div>';
     } else {
       html+='<div class="vd '+vdCls(grade)+'"><div class="v1">'+grade+'</div><div class="v2">최대 편차 '+fx(dmax,1)+'mm / 허용 ±'+aRes.tol+'mm</div></div>';
     }
+    html+='<div class="kv"><span>판정 대상</span><b>세로 줄눈만 (진행방향)</b></div>'+
+      '<div class="tiny" style="margin:2px 0 6px;opacity:.85">가로 줄눈은 <b>판정하지 않습니다</b> — 곡선 보도에서는 부챗살처럼 벌어지는 것이, '+
+      '엇금 깔기에서는 반 칸씩 어긋나는 것이 <b>맞게 시공한 것</b>이라 통직도의 기준이 될 수 없습니다. '+
+      '(가로는 계속 읽되 <b>종단 형상·침하</b> 계산에만 씁니다)</div>';
     html+='<div class="kv"><span>판정 구간</span><b>블록 '+aRes.seg+'장 단위</b></div>';
     html+='<div class="kv"><span>검사한 줄눈</span><b>'+live.length+'구간 (전체 '+aRes.rows.length+')</b></div>';
     var detAvg=aRes.rows.reduce(function(a,r){return a+(r.det||0);},0)/(aRes.rows.length||1);
