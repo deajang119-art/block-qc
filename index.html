@@ -275,6 +275,10 @@ details ul{padding-left:18px;margin:7px 0}
     </div>
     <div class="tiny" style="margin-top:7px">자를 <b>옆에서</b> 한 장 · 자를 치우고 <b>위에서</b> 한 장.
       <b>순서도 종류도 고르지 마십시오</b> — 앱이 가려서 알맞은 칸을 채웁니다.</div>
+    <div class="note" style="margin:9px 0 0">
+      <b>★위에서 찍을 때 — 진행방향이 «세로»로 오게</b>
+      <div id="shotDirSpot" style="margin-top:7px"></div>
+    </div>
 
     <div style="height:11px"></div>
     <label class="lab">옆에서 찍은 사진은 무엇을 재나</label>
@@ -389,6 +393,9 @@ details ul{padding-left:18px;margin:7px 0}
         <button class="btn" id="jPhoto">📷 촬영</button>
         <button class="btn sec" id="jPick">🖼 앨범에서 선택</button>
       </div>
+    <div class="note" style="margin:9px 0 0"><b>★어느 줄눈을 재나 — 진행방향(세로) 줄눈</b>
+      <div class="tiny" style="margin-top:4px">가로 줄눈은 <b>곡선 보도에서 부챗살로 벌어지고 엇금 깔기에서 반 칸씩 어긋나는 것이
+      맞게 시공한 것</b>이라 통직도의 기준이 될 수 없습니다.</div></div>
     <div class="tiny" style="margin-top:8px">
       촬영 요령 — ① 줄눈선이 화면 <b>대각선으로 길게</b> 들어오도록 ② 카메라를 <b>노면에 최대한 수직</b>으로(비스듬하면 원근 왜곡으로 값이 커짐)
       ③ 축척 기준물(줄자·블록 1장)이 <b>같은 평면</b>에 보이도록.
@@ -755,6 +762,11 @@ details ul{padding-left:18px;margin:7px 0}
         <button class="btn sec" id="aPick">🖼 앨범에서 선택</button>
       </div>
     <div class="tiny" id="aShoot" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="aShotDirCard">
+    <h3>★ 찍는 방향 — 진행방향이 «세로»로</h3>
+    <div id="shotDirAuto"></div>
   </div>
 
   <div class="card hide" id="aStep2">
@@ -3827,7 +3839,7 @@ function aReset(){
   AM.reset(); aRes=null;
   $("#uBusy").classList.add("hide"); $("#uStep3").classList.add("hide");
   $("#aStep2").classList.add("hide"); $("#aStep3").classList.add("hide");
-  $("#aStep1").classList.remove("hide"); $("#aRun").disabled=true;
+  $("#aStep1").classList.remove("hide"); $("#aShotDirCard").classList.remove("hide"); $("#aRun").disabled=true;
   $("#aCount").classList.add("hide"); $("#aStat").textContent="";
 }
 $("#aPhoto").onclick=function(){ pickPhoto("#aFile",true); };
@@ -3849,7 +3861,7 @@ $("#aFile").onchange=function(e){
     uF35=null;
     try{ uF35=BlockAuto.exifFocal35(ev.target.result)||null; }catch(err){}
     AM.load(f,function(){
-      $("#aStep1").classList.add("hide"); $("#aStep2").classList.remove("hide");
+      $("#aStep1").classList.add("hide"); $("#aShotDirCard").classList.add("hide"); $("#aStep2").classList.remove("hide");
       $("#aStep3").classList.add("hide"); AM.fit(); aPhase();
       if(aMode==="plan") aSuggest(true);
     });
@@ -4584,7 +4596,7 @@ function spOpenCommon(mode,banner){
   $$(".amode").forEach(function(b){ b.classList.toggle("on", b.dataset.m===mode); });
   aStd();                    // ⚠aReset 을 부른다 → 점이 지워지므로 이 뒤에 놓는다
   AM.img=im; AM.fit();
-  $("#aStep1").classList.add("hide"); $("#aStep2").classList.remove("hide");
+  $("#aStep1").classList.add("hide"); $("#aShotDirCard").classList.add("hide"); $("#aStep2").classList.remove("hide");
   $("#aStep3").classList.add("hide");
   go("auto");
   $("#aBnTxt").textContent=banner;
@@ -4640,6 +4652,45 @@ function spOpenSide(S){
   }
   aPhase();
 }
+/* ══════════════════════════════════════════════════════════════
+   ★찍는 방향 — 말로만 적으면 안 읽는다. 그림으로 못 박는다.
+   줄눈은 «사진에서 세로로 뻗은 것»만 판정한다. 진행방향이 세로로
+   와야 그 줄눈이 세로가 된다. 찍기 «전»에 보이는 자리에만 놓는다.
+══════════════════════════════════════════════════════════════ */
+function shotDirBox(){
+  function panel(x, ok){
+    var s='', i;
+    var C = ok? "#7EE2B0" : "#FF9C93";
+    s+='<rect x="'+x+'" y="20" width="100" height="78" rx="5" fill="#0B1626" stroke="'+(ok?"#2F9E6B":"#C0392B")+'" stroke-width="1.4"/>';
+    if(ok){
+      for(i=1;i<4;i++) s+='<line x1="'+(x+i*25)+'" y1="20" x2="'+(x+i*25)+'" y2="98" stroke="'+C+'" stroke-width="2.6"/>';
+      for(i=1;i<4;i++) s+='<line x1="'+x+'" y1="'+(20+i*19.5)+'" x2="'+(x+100)+'" y2="'+(20+i*19.5)+'" stroke="#35506E" stroke-width="1"/>';
+      s+='<line x1="'+(x+50)+'" y1="30" x2="'+(x+50)+'" y2="88" stroke="#4FC3F7" stroke-width="2.2" stroke-dasharray="5 4" marker-end="url(#arw)"/>';
+    }else{
+      for(i=1;i<4;i++) s+='<line x1="'+x+'" y1="'+(20+i*19.5)+'" x2="'+(x+100)+'" y2="'+(20+i*19.5)+'" stroke="'+C+'" stroke-width="2.6"/>';
+      for(i=1;i<4;i++) s+='<line x1="'+(x+i*25)+'" y1="20" x2="'+(x+i*25)+'" y2="98" stroke="#35506E" stroke-width="1"/>';
+      s+='<line x1="'+(x+12)+'" y1="59" x2="'+(x+88)+'" y2="59" stroke="#4FC3F7" stroke-width="2.2" stroke-dasharray="5 4" marker-end="url(#arw)"/>';
+    }
+    return s;
+  }
+  return '<svg class="dia" viewBox="0 0 264 128" role="img" aria-label="줄눈은 세로로 뻗은 것만 판정합니다">'+
+    '<defs><marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">'+
+    '<path d="M0,1 L9,5 L0,9 z" fill="#4FC3F7"/></marker></defs>'+
+    '<text x="20" y="13" fill="#7EE2B0" font-size="10" font-weight="700">✔ 이렇게 — 잽니다</text>'+
+    '<text x="144" y="13" fill="#FF9C93" font-size="10" font-weight="700">✖ 이러면 못 잽니다</text>'+
+    panel(20,true)+panel(144,false)+
+    '<text x="20" y="113" fill="#BBD4EA" font-size="9.5">진행방향이 <tspan font-weight="700">세로</tspan></text>'+
+    '<text x="144" y="113" fill="#BBD4EA" font-size="9.5">진행방향이 <tspan font-weight="700">가로</tspan></text>'+
+    '<text x="20" y="125" fill="#7C93AC" font-size="8.5">굵은 선 = 판정하는 줄눈</text>'+
+    '<text x="144" y="125" fill="#7C93AC" font-size="8.5">판정할 세로 줄눈이 없음</text>'+
+    '</svg>'+
+    '<div class="tiny" style="margin-top:6px">줄눈은 <b>사진에서 세로로 뻗은 것만</b> 판정합니다. '+
+    '가로 줄눈은 <b>곡선 보도에서 부챗살로 벌어지고 엇금 깔기에서 반 칸씩 어긋나는 것이 맞게 시공한 것</b>이라 '+
+    '기준이 될 수 없습니다. <b>보도를 따라 서서, 진행방향이 화면 위아래로 오게</b> 찍으십시오.</div>';
+}
+["#shotDirSpot","#shotDirAuto"].forEach(function(sel){
+  var el=$(sel); if(el) el.innerHTML=shotDirBox();
+});
 specFromSite(); spSpecTag(); renderChk(); renderSpot();
 /* ══════════════════════════════════════════════════════════════
    점자블록 = 법이 크기를 못박은 «300mm 자»
@@ -5909,7 +5960,7 @@ function uCanvasData(img,w){
 }
 
 function uRun(){
-  $("#aStep1").classList.add("hide"); $("#aStep2").classList.add("hide");
+  $("#aStep1").classList.add("hide"); $("#aShotDirCard").classList.add("hide"); $("#aStep2").classList.add("hide");
   $("#aStep3").classList.add("hide"); $("#uStep3").classList.add("hide");
   $("#uBusy").classList.remove("hide");
   /* 계산이 동기라서 바로 돌리면 '판독 중' 글자가 안 그려진다 → 한 박자 쉰다 */
